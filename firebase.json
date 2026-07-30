@@ -1,0 +1,57 @@
+{
+  "//": [
+    "Firebase CLI configuration. Its absence is what caused",
+    "'Error: Not in a Firebase app directory (could not locate firebase.json)' —",
+    "the CLI looks for this file to know which rules belong to which service.",
+    "",
+    "Deploy commands:",
+    "  firebase deploy --only firestore:rules   security rules for Firestore",
+    "  firebase deploy --only firestore:indexes composite indexes",
+    "  firebase deploy --only storage           security rules for the bucket",
+    "  firebase deploy --only hosting           the built site in dist/",
+    "",
+    "Firestore and Storage rules are separate deploys. Deploying one does not",
+    "touch the other, and the Storage default allows any signed-in user to write."
+  ],
+
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+
+  "storage": {
+    "rules": "storage.rules"
+  },
+
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "//": "Single-page app: every path must serve index.html so react-router can handle it. Without this, a hard refresh on /shop returns a 404 from Firebase Hosting.",
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "//": "Vite fingerprints these filenames, so the content at a given URL never changes and can be cached indefinitely.",
+        "source": "/assets/**",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      },
+      {
+        "//": "index.html must never be cached, or a returning visitor keeps loading the old app shell and its stale asset references.",
+        "source": "/index.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      }
+    ]
+  },
+
+  "emulators": {
+    "//": "Matches the ports in src/lib/firebase.ts. Set VITE_USE_FIREBASE_EMULATORS=true in .env.local to point the app here. Note the Firestore emulator needs Java installed.",
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "storage": { "port": 9199 },
+    "ui": { "enabled": true }
+  }
+}

@@ -1,0 +1,19 @@
+/**
+ * Typography for Plan B Vision.
+ *
+ * Inter carries the Latin UI. Noto Sans Myanmar is loaded alongside it so that
+ * Burmese copy renders with correct stacking/ligatures instead of falling back
+ * to whatever the OS happens to ship — Windows' default Myanmar font breaks
+ * medial consonants badly.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap');
+
+/* The `--font-sans` / `--font-myanmar` stacks themselves live in theme.css's
+   `@theme` block so Tailwind generates `font-sans` / `font-myanmar` utilities. */
+
+/* Burmese stacks marks above and below the baseline, so it needs a taller line-box. */
+:lang(my),
+[lang='my'] {
+  font-family: var(--font-myanmar);
+  line-height: 1.85;
+}

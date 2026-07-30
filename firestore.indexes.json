@@ -1,0 +1,54 @@
+{
+  "//": [
+    "Composite indexes. Firestore creates single-field indexes automatically, but a",
+    "query that filters on one field and orders by another — or filters on two —",
+    "needs an explicit composite index or it fails at runtime.",
+    "",
+    "Deploy with: firebase deploy --only firestore:indexes",
+    "",
+    "Declaring them here rather than clicking the link in the error message means a",
+    "fresh project works on first run instead of throwing the first time a customer",
+    "opens their bookings."
+  ],
+
+  "indexes": [
+    {
+      "//": "listMyAppointments: where('uid','==') + orderBy('date','desc')",
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "myBookedSlots: where('uid','==') + where('date','==') — two equality filters on different fields still need a composite index.",
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Reviews for one frame, newest first (Module 7).",
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "frameId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "queryFramesByFaceShape in lib/firestore/frames.ts. Unused today — the catalogue is small enough to filter in memory — but declared so the escape hatch works the moment it is needed.",
+      "collectionGroup": "frames",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "faceShapes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAtMs", "order": "DESCENDING" }
+      ]
+    }
+  ],
+
+  "fieldOverrides": []
+}

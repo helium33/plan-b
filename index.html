@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Plan B Vision — See clearly. Look like yourself.</title>
+    <meta
+      name="description"
+      content="Plan B Vision — prescription eyewear, honestly priced. Frames chosen for your face, fitted and glazed by real opticians in Yangon, Myanmar."
+    />
+    <meta name="theme-color" content="#ffffff" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!--
+      Resolve the theme before first paint.
+
+      Without this, the browser paints the light default and React swaps to dark
+      a frame later — a white flash on every load for dark-mode users. Kept in
+      sync with `applyTheme()` in src/app/stores/theme-store.ts; the shape read
+      here is Zustand's persist envelope.
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('pbv-theme');
+          var mode = raw ? JSON.parse(raw).state.mode : 'system';
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+          if (dark) {
+            document.documentElement.classList.add('dark');
+            document
+              .querySelector('meta[name="theme-color"]')
+              .setAttribute('content', '#12151c');
+          }
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (error) {
+          /* Private mode or malformed value — fall through to the light default. */
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
