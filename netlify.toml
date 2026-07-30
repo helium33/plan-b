@@ -1,0 +1,75 @@
+# Netlify configuration for Plan B Vision.
+#
+# ── If you later connect this repo to Netlify for automatic builds ──────────
+# Netlify will run the build command below on its own servers, where `.env.local`
+# does not exist. Vite inlines `VITE_*` variables at build time, so the build
+# would produce a bundle with no Firebase config and the site would fail at boot.
+#
+# So before enabling git-based builds, add these in
+# Site configuration → Environment variables:
+#
+#   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+#   VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID,
+#   VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID,
+#   VITE_TELEGRAM_HANDLE, VITE_STORE_PHONE, VITE_STORE_EMAIL
+#
+# These are public client identifiers, not secrets — the protection is the
+# Firestore/Storage rules. But they must be present or the app throws on start,
+# by design (see src/lib/env.ts).
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Match the local toolchain rather than letting Netlify pick a default that
+  # differs from what the lockfile was resolved against.
+  NODE_VERSION = "22"
+
+# ── Single-page app routing ───────────────────────────────────────────────────
+#
+# react-router handles paths in the browser, but a hard refresh or a shared link
+# asks Netlify for that path directly. Without this catch-all, /shop returns 404
+# from the CDN and the app never boots. Status 200 (a rewrite, not a redirect)
+# keeps the URL intact so the router sees the real path.
+#
+# This must be the LAST redirect rule — Netlify applies them in order.
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+
+[[headers]]
+  # Vite fingerprints these filenames, so the bytes at a given URL never change.
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  # The app shell must never be cached, or a returning visitor keeps loading an
+  # old index.html that references asset filenames which no longer exist.
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# ── Security headers ──────────────────────────────────────────────────────────
+#
+# Deliberately no Content-Security-Policy here. Getting one right for this app
+# means allowing Firebase Auth's iframe and reCAPTCHA, Firestore's WebChannel,
+# Storage, Google Fonts, and the blob:/data: URIs the watermark and try-on rely
+# on — a CSP that is nearly right silently breaks phone sign-in, which is the
+# primary way customers log in. Worth adding deliberately later and testing OTP
+# end to end, not worth guessing at now.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # The try-on and PD tool use a file input with `capture`, not getUserMedia,
+    # so no camera permission is needed. Denied explicitly.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
