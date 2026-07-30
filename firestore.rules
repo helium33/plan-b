@@ -149,10 +149,10 @@ service cloud.firestore {
           && request.resource.data.points is int
           && request.resource.data.balanceAfter is int
           && request.resource.data.balanceAfter >= 0
-          && request.resource.data.reason in [
+          && (request.resource.data.reason in [
                'signup-bonus', 'onboarding-bonus', 'purchase', 'review-bonus',
                'redemption', 'in-store-sync', 'manual-adjustment'
-             ];
+             ]);
 
         allow update, delete: if false;
       }
@@ -216,8 +216,11 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'requested'
         && isPhoneKey(request.resource.data.phoneKey)
-        && request.resource.data.service in
-             ['eye-test', 'frame-fitting', 'adjustment', 'collection']
+        // Bracket notation, not `.service`: `service` is a reserved keyword in the
+        // rules language (`service cloud.firestore { … }`), so dot access on a
+        // field of that name derails the parser with a misleading error on the
+        // *next* token. The stored field is still named `service`.
+        && (request.resource.data['service'] in ['eye-test', 'frame-fitting', 'adjustment', 'collection'])
         // `YYYY-MM-DD`, so a malformed date cannot break the shop's day view.
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.startMinutes is int
