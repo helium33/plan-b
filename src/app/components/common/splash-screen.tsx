@@ -10,23 +10,23 @@
  * `sessionStorage` rather than `localStorage` on purpose: coming back tomorrow
  * should feel like opening the app, and coming back from the voucher should not.
  *
- * ── Why it renders its own wordmark ────────────────────────────────────────
- * The shared `Logo` is built for a 32px bar: mark, name, and a muted tagline in
- * theme colours. This is a full-screen brand plate in one fixed colour, and the
- * B sits in a knocked-out pill the way it does on the shop's own signage. The
- * two have almost nothing in common beyond the letters, so this draws its own
- * rather than bending `Logo` with props that only one caller would ever pass.
+ * ── What it shows ──────────────────────────────────────────────────────────
+ * The Plan B Vision logo and the family's welcome line, animated by
+ * `BrandGreeting` — the same moment the sign-in and goodbye screens use, so
+ * opening the app, signing in and leaving all greet a person the same way.
  */
 import { useEffect, useRef, useState } from 'react';
 
-import { LogoMark } from '@/app/components/common/logo';
+import { WELCOME_MESSAGE } from '@/app/components/auth/auth-screens';
+import { BrandGreeting } from '@/app/components/brand/brand-greeting';
+import { BRAND_LOGO_COLOR } from '@/app/components/brand/brand-logo';
 import { cn } from '@/app/components/ui/utils';
 import { useOnboardingStore } from '@/app/stores/onboarding-store';
 
 const SESSION_KEY = 'pbw-splash-shown';
 
-/** How long the plate holds after the logo lands. */
-const HOLD_MS = 1_600;
+/** Long enough for the greeting to finish arriving and be read once. */
+const HOLD_MS = 2_600;
 
 /** Must match the `duration-500` on the exit transition below. */
 const FADE_MS = 500;
@@ -96,26 +96,13 @@ export function SplashScreen() {
       // `aria-hidden` and no live region: this announces nothing a screen-reader
       // user needs, and the page behind it is already being read.
       aria-hidden="true"
+      style={{ backgroundColor: BRAND_LOGO_COLOR }}
       className={cn(
-        'fixed inset-0 z-[100] grid place-items-center bg-brand-600 transition-opacity duration-500',
+        'fixed inset-0 z-[100] grid place-items-center px-6 transition-opacity duration-500',
         phase === 'out' ? 'pointer-events-none opacity-0' : 'opacity-100',
       )}
     >
-      <div className="px-6 text-center motion-safe:animate-[pbwSplashDrop_0.85s_cubic-bezier(0.34,1.3,0.64,1)_both]">
-        <LogoMark className="mx-auto h-10 w-20 text-white/90" />
-
-        <p className="mt-5 flex items-center justify-center gap-2 text-3xl font-black tracking-[0.12em] text-white sm:text-4xl">
-          PLAN
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-white text-3xl leading-none text-brand-600 sm:h-12 sm:w-12 sm:text-4xl">
-            B
-          </span>
-          VISION
-        </p>
-
-        <p className="mt-4 text-[0.7rem] font-medium tracking-[0.42em] text-white/75 motion-safe:animate-[pbwSplashRise_0.5s_ease-out_0.45s_both]">
-          EYEWEARS
-        </p>
-      </div>
+      <BrandGreeting message={WELCOME_MESSAGE} />
     </div>
   );
 }

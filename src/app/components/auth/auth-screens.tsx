@@ -20,7 +20,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { BRAND_LOGO_COLOR, BrandLogo } from '@/app/components/brand/brand-logo';
+import { BrandGreeting } from '@/app/components/brand/brand-greeting';
+import { BRAND_LOGO_COLOR } from '@/app/components/brand/brand-logo';
 import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
 import { useAuth } from '@/app/hooks/use-auth';
@@ -32,7 +33,7 @@ export const WELCOME_MESSAGE = 'Plan B မိသားစုမှ ဝင်ရ�
 export const GOODBYE_MESSAGE = 'Plan B မိသားစုမှ နှုတ်ဆက်လိုက်ပါသည်';
 
 /** How long the goodbye holds before fading — long enough to read one line. */
-const GOODBYE_HOLD_MS = 2_200;
+const GOODBYE_HOLD_MS = 2_800;
 
 /** Matches `duration-500` on the fade below. */
 const GOODBYE_FADE_MS = 500;
@@ -50,15 +51,7 @@ export function WelcomeScreen({ children, footer }: { children: ReactNode; foote
       className="flex min-h-dvh flex-col items-center justify-center px-5 py-10"
     >
       <div className="flex w-full max-w-sm flex-col items-center text-center">
-        {/* On its own colour the plate disappears and the mark stands alone. */}
-        <BrandLogo className="shadow-none motion-safe:animate-[pbwSplashDrop_0.85s_cubic-bezier(0.34,1.3,0.64,1)_both]" />
-
-        <h1
-          lang="my"
-          className="mt-6 font-myanmar text-[1.05rem] font-semibold leading-[1.9] text-white motion-safe:animate-[pbwSplashRise_0.5s_ease-out_0.35s_both]"
-        >
-          {WELCOME_MESSAGE}
-        </h1>
+        <BrandGreeting message={WELCOME_MESSAGE} as="h1" />
 
         <div className="mt-7 w-full rounded-3xl bg-card p-5 text-left text-card-foreground shadow-xl">
           {children}
@@ -112,16 +105,7 @@ export function GoodbyeScreen() {
         leaving ? 'opacity-0' : 'opacity-100',
       )}
     >
-      {/* On its own colour the logo's plate disappears and the mark reads
-          exactly as it does on the shop's signage. */}
-      <BrandLogo className="shadow-none motion-safe:animate-[pbwSplashDrop_0.85s_cubic-bezier(0.34,1.3,0.64,1)_both]" />
-
-      <p
-        lang="my"
-        className="mt-6 max-w-xs font-myanmar text-lg font-semibold leading-[1.9] text-white motion-safe:animate-[pbwSplashRise_0.5s_ease-out_0.4s_both]"
-      >
-        {GOODBYE_MESSAGE}
-      </p>
+      <BrandGreeting message={GOODBYE_MESSAGE} mood="goodbye" />
     </div>
   );
 }

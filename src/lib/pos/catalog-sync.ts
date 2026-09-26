@@ -16,8 +16,9 @@
  *     stock) — keeping any photos already added to its colours.
  *   - An entry uploaded through the website with the same model number is
  *     only linked. Its photos and wording are the shop's and are never
- *     overwritten. Editing a POS-made entry in the upload form turns it into
- *     one of these, which is the way to take it out of the sync.
+ *     overwritten. Editing a POS-made entry in the admin form keeps it POS-made
+ *     (the save merges, so `source` survives): the photos, name and wording
+ *     added there stay, and price, colours and stock keep following the POS.
  *   - Accessories (cases, cloths) are not frames and are skipped.
  */
 import {
@@ -33,7 +34,7 @@ import {
 import { db } from '@/lib/firebase';
 import { POS_LINKS_COLLECTION, normalizeModelNo } from '@/lib/pos/catalog-link';
 import { MAIN_LOCATION, POS } from '@/lib/pos/schema';
-import { FRAMES_COLLECTION, frameSlug } from '@/lib/product';
+import { FRAMES_COLLECTION } from '@/lib/product';
 import type { FrameCategory, FrameMaterial, FrameShape, StockStatus } from '@/lib/attributes';
 
 /** Marks a catalogue entry this sync owns. */
@@ -170,12 +171,15 @@ function frameFromProduct(
     createdAtMs: num(previous?.createdAtMs) || Date.now(),
     published: previous ? previous.published !== false : true,
     source: POS_SOURCE,
+    posProductId: String(product.id ?? ''),
   };
 }
 
 /** Enough of an entry to tell whether a refresh would change anything. */
 function signature(frame: DocumentData): string {
   return JSON.stringify([
+    frame.brand,
+    frame.frameCode,
     frame.wholesalePrice,
     frame.stockStatus,
     frame.material,
@@ -194,6 +198,113 @@ function signature(frame: DocumentData): string {
 }
 
 /**
+ * The catalogue id for a POS product's entry.
+ *
+ * From the product id, not from brand + model: the POS keeps two products
+ * with the same model number apart (a different name, a different lens size),
+ * and a brand + model slug would file both under one id — Burmese letters in a
+ * name are dropped from a slug entirely, so "Soulmate" and "Soulmate သံ" would
+ * collide — and one would silently overwrite the other on every sync.
+ */
+export function posFrameId(productId: string): string {
+  return `pos-${productId
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')}`;
+}
+
+type PlannedWrite =
+  | { kind: 'frame'; id: string; data: DocumentData }
+  | { kind: 'link'; frameId: string; productId: string; frameCode: string };
+
+/**
+ * Decides what a sync writes, without touching the database — so it can be
+ * reasoned about (and tested) as plain data.
+ *
+ *   1. A POS-made entry is found by the product it was made from: its
+ *      `posProductId`, or for entries older than that field, its `posLinks`.
+ *   2. Otherwise, a website-uploaded entry with the same model number is the
+ *      shop's own photo shoot of this frame, and is only linked. Two such
+ *      entries is a question for a person, reported as ambiguous.
+ *   3. Otherwise the frame is new, and gets an entry of its own.
+ */
+export function planCatalogueSync(input: {
+  products: { id: string; data: DocumentData }[];
+  variantsByProduct: Map<string, DocumentData[]>;
+  frames: ExistingFrame[];
+  links: Map<string, string>;
+}): { writes: PlannedWrite[]; report: SyncReport } {
+  const { products, variantsByProduct, frames, links } = input;
+
+  const posMadeByProduct = new Map<string, ExistingFrame>();
+  const uploadedByModel = new Map<string, ExistingFrame[]>();
+  for (const frame of frames) {
+    if (frame.data.source === POS_SOURCE) {
+      const productId = str(frame.data.posProductId) || links.get(frame.id) || '';
+      if (productId && !posMadeByProduct.has(productId)) posMadeByProduct.set(productId, frame);
+      continue;
+    }
+    const key = normalizeModelNo(str(frame.data.frameCode));
+    if (key) uploadedByModel.set(key, [...(uploadedByModel.get(key) ?? []), frame]);
+  }
+
+  const report: SyncReport = { added: [], updated: [], linked: [], ambiguous: [] };
+  const writes: PlannedWrite[] = [];
+
+  for (const product of products) {
+    const data = product.data;
+    if (data.active === false) continue;
+    const kind = str(data.category).toUpperCase();
+    if (kind && kind !== 'FRAME') continue;
+
+    const modelNo = str(data.modelNo);
+    const key = normalizeModelNo(modelNo);
+    if (!key) continue;
+
+    const link = (frameId: string): PlannedWrite => ({
+      kind: 'link',
+      frameId,
+      productId: product.id,
+      frameCode: modelNo,
+    });
+
+    const posMade = posMadeByProduct.get(product.id) ?? null;
+    if (!posMade) {
+      const uploaded = uploadedByModel.get(key) ?? [];
+      if (uploaded.length > 1) {
+        report.ambiguous.push(modelNo);
+        continue;
+      }
+      // Uploaded through the website: the shop's own entry. Link, never touch.
+      if (uploaded.length === 1) {
+        if (links.get(uploaded[0].id) !== product.id) {
+          writes.push(link(uploaded[0].id));
+          report.linked.push(modelNo);
+        }
+        continue;
+      }
+    }
+
+    const next = frameFromProduct(
+      { ...data, id: product.id },
+      variantsByProduct.get(product.id) ?? [],
+      posMade?.data ?? null,
+    );
+    if (posMade && signature(posMade.data) === signature(next)) {
+      if (links.get(posMade.id) !== product.id) writes.push(link(posMade.id));
+      continue;
+    }
+
+    const frameId = posMade?.id ?? posFrameId(product.id);
+    writes.push({ kind: 'frame', id: frameId, data: next });
+    writes.push(link(frameId));
+    (posMade ? report.updated : report.added).push(modelNo);
+  }
+
+  return { writes, report };
+}
+
+/**
  * Brings the website catalogue up to date with the POS.
  *
  * Needs an account the rules let read POS products: a POS `ADMIN`, or the
@@ -208,8 +319,6 @@ export async function syncCatalogueFromPos(): Promise<SyncReport> {
     getDocs(collection(db, POS_LINKS_COLLECTION)),
   ]);
 
-  const linkedProduct = new Map(linkSnap.docs.map((l) => [l.id, str(l.get('productId'))]));
-
   const variantsByProduct = new Map<string, DocumentData[]>();
   for (const v of variantSnap.docs) {
     const productId = v.ref.parent.parent?.id;
@@ -220,63 +329,29 @@ export async function syncCatalogueFromPos(): Promise<SyncReport> {
     ]);
   }
 
-  const framesByModel = new Map<string, ExistingFrame[]>();
-  for (const f of frameSnap.docs) {
-    const key = normalizeModelNo(str(f.get('frameCode')));
-    if (!key) continue;
-    framesByModel.set(key, [...(framesByModel.get(key) ?? []), { id: f.id, data: f.data() }]);
-  }
-
-  const report: SyncReport = { added: [], updated: [], linked: [], ambiguous: [] };
-  const writes: ((batch: ReturnType<typeof writeBatch>) => void)[] = [];
-
-  for (const product of productSnap.docs) {
-    const data = product.data();
-    if (data.active === false) continue;
-    const kind = str(data.category).toUpperCase();
-    if (kind && kind !== 'FRAME') continue;
-
-    const modelNo = str(data.modelNo);
-    const key = normalizeModelNo(modelNo);
-    if (!key) continue;
-
-    const matches = framesByModel.get(key) ?? [];
-    if (matches.length > 1) {
-      report.ambiguous.push(modelNo);
-      continue;
-    }
-
-    const existing = matches[0] ?? null;
-    const link = (frameId: string) => (batch: ReturnType<typeof writeBatch>) =>
-      batch.set(doc(db, POS_LINKS_COLLECTION, frameId), {
-        productId: product.id,
-        frameCode: modelNo,
-        linkedAt: serverTimestamp(),
-      });
-
-    // Uploaded through the website: the shop's own entry. Link, never touch.
-    if (existing && existing.data.source !== POS_SOURCE) {
-      if (linkedProduct.get(existing.id) !== product.id) {
-        writes.push(link(existing.id));
-        report.linked.push(modelNo);
-      }
-      continue;
-    }
-
-    const next = frameFromProduct(data, variantsByProduct.get(product.id) ?? [], existing?.data ?? null);
-    if (existing && signature(existing.data) === signature(next)) continue;
-
-    const frameId = existing?.id ?? frameSlug(next.brand, next.frameCode);
-    writes.push((batch) =>
-      batch.set(doc(db, FRAMES_COLLECTION, frameId), { ...next, updatedAt: serverTimestamp() }),
-    );
-    writes.push(link(frameId));
-    (existing ? report.updated : report.added).push(modelNo);
-  }
+  const { writes, report } = planCatalogueSync({
+    products: productSnap.docs.map((p) => ({ id: p.id, data: p.data() })),
+    variantsByProduct,
+    frames: frameSnap.docs.map((f) => ({ id: f.id, data: f.data() })),
+    links: new Map(linkSnap.docs.map((l) => [l.id, str(l.get('productId'))])),
+  });
 
   for (let i = 0; i < writes.length; i += WRITES_PER_BATCH) {
     const batch = writeBatch(db);
-    for (const write of writes.slice(i, i + WRITES_PER_BATCH)) write(batch);
+    for (const write of writes.slice(i, i + WRITES_PER_BATCH)) {
+      if (write.kind === 'frame') {
+        batch.set(doc(db, FRAMES_COLLECTION, write.id), {
+          ...write.data,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        batch.set(doc(db, POS_LINKS_COLLECTION, write.frameId), {
+          productId: write.productId,
+          frameCode: write.frameCode,
+          linkedAt: serverTimestamp(),
+        });
+      }
+    }
     await batch.commit();
   }
 

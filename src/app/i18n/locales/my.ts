@@ -15,12 +15,12 @@ import type { TranslationSchema } from './en';
  */
 export const my: TranslationSchema = {
   brand: {
-    name: 'Plan B Wholesale',
+    name: 'Plan B Vision',
     tagline: 'မျက်မှန်ကိုင်း လက်ကား',
   },
 
   app: {
-    name: 'Plan B Wholesale',
+    name: 'Plan B Vision',
     tagline: 'မျက်မှန် · လက်ကား',
   },
 
@@ -128,6 +128,7 @@ export const my: TranslationSchema = {
   /* ── ငါတို့ကိုင်း ────────────────────────────────────────────────────────── */
 
   catalog: {
+    seriesLabel: 'ကိုင်းအမည်များ',
     all: 'အားလုံး',
     filterCategory: 'ဘယ်သူ့အတွက် · Who it is for',
     filterMaterial: 'ပစ္စည်း · Material',
@@ -357,6 +358,20 @@ export const my: TranslationSchema = {
   },
 
   admin: {
+    edit: {
+      action: 'ပြင်ရန်',
+      addPhotos: 'ပုံထည့်ရန်',
+      heading: '{{code}} ကို ပြင်နေသည်',
+      note: 'အောက်ပါအချက်များကို ပြင်ပြီး သိမ်းပါ။ သိမ်းပြီးသားပုံများကို မဖျက်မချင်း ဆက်ရှိနေပါမည်။',
+      posNote:
+        'ဤကိုင်းသည် POS မှ လာသည်။ ပုံ၊ အမည်နှင့် ဖော်ပြချက်ကို ဤနေရာတွင် ထည့်ပါ — ဈေးနှုန်း၊ အရောင်နှင့် လက်ကျန်တို့ကို POS အတိုင်း ဆက်ပြပါမည်။',
+      variantsNote: 'အရောင်တိုင်းတွင် ပုံထည့်နိုင်သည်။ ပုံအသစ်များသည် သိမ်းပြီးသားပုံများ၏ နောက်တွင် ရှိပါမည်။',
+      savedPhotos_one: 'သိမ်းပြီးသားပုံ {{count}} ပုံ',
+      savedPhotos_other: 'သိမ်းပြီးသားပုံ {{count}} ပုံ',
+      removePhoto: '{{code}} ၏ ပုံ {{number}} ကို ဖယ်ရန်',
+      backToFrames: 'ကိုင်းစာရင်းသို့ ပြန်သွားရန်',
+      notFound: 'ထိုကိုင်း မရှိတော့ပါ။',
+    },
     title: 'ကတ်တလောက် စီမံရန်',
     subtitle: 'ကိုင်းများ တင်ရန်၊ ဝယ်သူများ မြင်ရမည့်အရာကို စီမံရန်။',
     tabs: { upload: 'တင်ရန်', frames: 'ကိုင်းများ', credit: 'အကြွေး', seed: 'နမူနာ' },

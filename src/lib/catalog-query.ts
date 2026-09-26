@@ -20,6 +20,8 @@ export type CatalogFilters = {
   category: FrameCategory | null;
   material: FrameMaterial | null;
   shape: FrameShape | null;
+  /** A name group from `listSeries` — the exact trimmed brand/name text. */
+  series: string | null;
   /** Restrict to bookmarked frames — the "Saved" tab. */
   savedOnly: boolean;
   /** Raw text from the search box. Empty string means no search. */
@@ -30,19 +32,47 @@ export const NO_FILTERS: CatalogFilters = {
   category: null,
   material: null,
   shape: null,
+  series: null,
   savedOnly: false,
   query: '',
 };
 
 /** How many *chip* filters are active. The search box is shown separately. */
 export function activeFilterCount(filters: CatalogFilters): number {
-  return [filters.category, filters.material, filters.shape].filter(Boolean).length;
+  return [filters.category, filters.material, filters.shape, filters.series].filter(Boolean).length;
 }
 
 export function hasAnyFilter(filters: CatalogFilters): boolean {
   return (
     activeFilterCount(filters) > 0 || filters.savedOnly || filters.query.trim().length > 0
   );
+}
+
+/* ── Name groups ───────────────────────────────────────────────────────────── */
+
+/**
+ * The group a frame is filed under: its name exactly as the POS spells it.
+ *
+ * Deliberately *not* folded or fuzzy-matched. The shop names its lines so that
+ * "Soulmate" and "Soulmate 2" are different ranges, and one character's
+ * difference at the end is how it says so — merging them would file two
+ * ranges together. Only surrounding spaces are ignored, since nobody means
+ * anything by those.
+ */
+export function seriesOf(frame: FrameDoc): string {
+  return frame.brand.trim() || frame.frameCode.trim();
+}
+
+/** Every name group in the catalogue with how many frames it holds, A→Z. */
+export function listSeries(frames: readonly FrameDoc[]): { name: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const frame of frames) {
+    const name = seriesOf(frame);
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
 /* ── Search ────────────────────────────────────────────────────────────────── */
@@ -113,7 +143,7 @@ export function searchFrames(frames: readonly FrameDoc[], query: string): FrameD
 /* ── Combined ──────────────────────────────────────────────────────────────── */
 
 /**
- * Applies the saved tab, all three chip filters and the search box.
+ * Applies the saved tab, the name group, all three chip filters and the search box.
  *
  * @param favouriteIds Bookmarked frame ids, needed only when `savedOnly` is set.
  */
@@ -129,7 +159,8 @@ export function queryCatalog(
       (!filters.savedOnly || saved.has(frame.id)) &&
       (filters.category === null || frame.category === filters.category) &&
       (filters.material === null || frame.material === filters.material) &&
-      (filters.shape === null || frame.shape === filters.shape),
+      (filters.shape === null || frame.shape === filters.shape) &&
+      (filters.series === null || seriesOf(frame) === filters.series),
   );
 
   return searchFrames(narrowed, filters.query);

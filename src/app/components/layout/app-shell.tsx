@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import { CatalogFilterGroups } from '@/app/components/catalog/filter-groups';
 import { LanguageToggle } from '@/app/components/common/language-toggle';
-import { LogoMark } from '@/app/components/common/logo';
+import { BrandBadge } from '@/app/components/brand/brand-logo';
 import { SplashScreen } from '@/app/components/common/splash-screen';
 import { ThemeToggle } from '@/app/components/common/theme-toggle';
 import { HowToUseModal } from '@/app/components/onboarding/how-to-use';
@@ -42,26 +42,9 @@ const BASE_TABS = [
 
 const CREDIT_TAB = { to: ROUTES.credit, labelKey: 'nav.credit', icon: Wallet, end: false } as const;
 
-/** The teal monogram, at whatever size the caller needs. */
+/** The Plan B Vision badge, for the header and the sidebar. */
 function Brand({ className }: { className?: string }) {
-  const { t } = useTranslation();
-
-  return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white">
-        <LogoMark className="h-3.5 w-6" />
-      </span>
-
-      <div className="min-w-0 flex-1 leading-none">
-        <p className="truncate text-[0.9rem] font-semibold tracking-tight text-foreground">
-          {t('app.name')}
-        </p>
-        <p className="mt-0.5 truncate text-[0.62rem] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          {t('app.tagline')}
-        </p>
-      </div>
-    </div>
-  );
+  return <BrandBadge className={className} />;
 }
 
 export function AppShell() {

@@ -9,8 +9,16 @@
  * document is written only once every URL is known. The reverse — write the
  * document, then upload — would publish a frame whose images 404 for however long
  * the upload takes, and permanently if it fails.
+ *
+ * ── Editing ────────────────────────────────────────────────────────────────
+ * `?edit=<id>` opens an existing frame — typically one the POS sync made, with
+ * no photos yet. Its photos stay as they are unless removed; new ones are
+ * added after them; the brand and model code are fixed, since they are the
+ * frame's id. No photo minimum applies: adding one photo to a bare POS frame
+ * is already better than none.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   CheckCircle2,
@@ -18,6 +26,7 @@ import {
   Plus,
   Save,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,6 +40,7 @@ import {
 } from '@/app/components/admin/media-picker';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
+import { ROUTES } from '@/app/config/navigation';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import {
   FRAME_CATEGORIES,
@@ -42,9 +52,10 @@ import {
   type FrameShape,
   type StockStatus,
 } from '@/lib/attributes';
+import { getFrame } from '@/lib/firestore/frames';
 import { saveFrame } from '@/lib/firestore/frame-writes';
 import { uploadMedia, variantFolder } from '@/lib/media/upload';
-import { type FrameVariant, frameSlug } from '@/lib/product';
+import { type FrameDoc, type FrameVariant, frameSlug } from '@/lib/product';
 
 /** At least two images per colour — one angle is not enough to judge a frame. */
 const MIN_IMAGES_PER_VARIANT = 2;
@@ -55,6 +66,9 @@ type VariantDraft = {
   cNumber: string;
   colorName: string;
   swatch: string;
+  /** Photos already saved on the frame, kept unless removed. */
+  existingImages: string[];
+  existingVideos: string[];
   images: PickedImage[];
   videos: PickedVideo[];
   inStock: boolean;
@@ -66,14 +80,28 @@ const newVariant = (index: number): VariantDraft => ({
   cNumber: `C${index + 1}`,
   colorName: '',
   swatch: '#1e293b',
+  existingImages: [],
+  existingVideos: [],
   images: [],
   videos: [],
   inStock: true,
 });
 
 export function AdminUploadPage() {
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  // Keyed so moving between frames, or from an edit back to a new upload,
+  // starts from a clean form instead of the last frame's leftovers.
+  return <UploadForm key={editId ?? 'new'} editId={editId} />;
+}
+
+function UploadForm({ editId }: { editId: string | null }) {
   const { t } = useTranslation();
   useDocumentTitle(t('admin.tabs.upload'));
+
+  /** The frame being edited, once loaded; `null` for a new upload. */
+  const [editing, setEditing] = useState<FrameDoc | null>(null);
+  const [editMissing, setEditMissing] = useState(false);
 
   /* Frame-level fields */
   const [brand, setBrand] = useState('');
@@ -107,6 +135,61 @@ export function AdminUploadPage() {
   const [progress, setProgress] = useState<{ label: string; fraction: number } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState<{ id: string; images: number; videos: number } | null>(null);
+
+  // Load the frame named in `?edit=` and fill the form with it.
+  useEffect(() => {
+    if (!editId) return;
+    let live = true;
+    setEditMissing(false);
+    getFrame(editId)
+      .then((frame) => {
+        if (!live) return;
+        if (!frame) {
+          setEditMissing(true);
+          return;
+        }
+        setEditing(frame);
+        setBrand(frame.brand);
+        setFrameCode(frame.frameCode);
+        setName(frame.name);
+        setWholesalePrice(frame.wholesalePrice ? String(frame.wholesalePrice) : '');
+        setDescription(frame.description);
+        setCategory(frame.category);
+        setMaterial(frame.material);
+        setShape(frame.shape);
+        setStockStatus(frame.stockStatus);
+        setLensWidth(frame.dimensions.lensWidth ? String(frame.dimensions.lensWidth) : '');
+        setBridge(frame.dimensions.bridge ? String(frame.dimensions.bridge) : '');
+        setTempleLength(frame.dimensions.templeLength ? String(frame.dimensions.templeLength) : '');
+        setWeightGrams(frame.weightGrams ? String(frame.weightGrams) : '');
+        setPublished(frame.published);
+        setIncludesCase(frame.includesCase);
+        setBestSeller(frame.bestSeller);
+        setVariants(
+          frame.variants.length > 0
+            ? frame.variants.map((variant) => ({
+                id: crypto.randomUUID(),
+                cNumber: variant.cNumber,
+                colorName: variant.colorName,
+                // The colour input only takes #rrggbb.
+                swatch: /^#[0-9a-f]{6}$/i.test(variant.swatch) ? variant.swatch : '#9ca3af',
+                existingImages: variant.images,
+                existingVideos: variant.videos,
+                images: [],
+                videos: [],
+                inStock: variant.inStock,
+              }))
+            : [newVariant(0)],
+        );
+      })
+      .catch(() => live && setEditMissing(true));
+    return () => {
+      live = false;
+    };
+  }, [editId]);
+
+  /** Photos each colour must have: none when editing, see the header. */
+  const minImages = editing ? 0 : MIN_IMAGES_PER_VARIANT;
 
   const slug = useMemo(
     () => (brand && frameCode ? frameSlug(brand, frameCode) : ''),
@@ -151,10 +234,8 @@ export function AdminUploadPage() {
         seen.add(code.toUpperCase());
       }
 
-      if (variant.images.length < MIN_IMAGES_PER_VARIANT) {
-        problems.push(
-          t('admin.errors.needImages', { code: label, min: MIN_IMAGES_PER_VARIANT }),
-        );
+      if (variant.existingImages.length + variant.images.length < minImages) {
+        problems.push(t('admin.errors.needImages', { code: label, min: minImages }));
       }
     }
 
@@ -183,14 +264,18 @@ export function AdminUploadPage() {
       );
       let completed = 0;
 
+      // A new photo must never land on an existing one's file name: an edit
+      // adds to photos saved earlier, which are named image-1, image-2, …
+      const stamp = editing ? `-${Date.now().toString(36)}` : '';
+
       const uploadedVariants: FrameVariant[] = [];
 
       for (const variant of variants) {
         const folder = variantFolder(slug, variant.cNumber.trim());
 
-        const imageUrls: string[] = [];
+        const imageUrls: string[] = [...variant.existingImages];
         for (const [index, image] of variant.images.entries()) {
-          const path = `${folder}/image-${index + 1}.${image.compressed.extension}`;
+          const path = `${folder}/image${stamp}-${index + 1}.${image.compressed.extension}`;
 
           const handle = uploadMedia(path, image.compressed.blob, (p) =>
             setProgress({
@@ -207,12 +292,12 @@ export function AdminUploadPage() {
           completed += 1;
         }
 
-        const videoUrls: string[] = [];
+        const videoUrls: string[] = [...variant.existingVideos];
         for (const [index, video] of variant.videos.entries()) {
           // Poster first: it is small, and if the video upload then fails the
           // shop still has a still to show for this colour.
           if (video.inspected.poster) {
-            const posterPath = `${folder}/poster-${index + 1}.${video.inspected.poster.extension}`;
+            const posterPath = `${folder}/poster${stamp}-${index + 1}.${video.inspected.poster.extension}`;
             const posterHandle = uploadMedia(posterPath, video.inspected.poster.blob, (p) =>
               setProgress({
                 label: t('admin.uploadingPoster', { current: completed + 1, total: totalFiles }),
@@ -224,7 +309,7 @@ export function AdminUploadPage() {
           completed += 1;
 
           const extension = video.file.name.split('.').pop()?.toLowerCase() || 'mp4';
-          const videoPath = `${folder}/video-${index + 1}.${extension}`;
+          const videoPath = `${folder}/video${stamp}-${index + 1}.${extension}`;
 
           const videoHandle = uploadMedia(videoPath, video.file, (p) =>
             setProgress({
@@ -273,7 +358,7 @@ export function AdminUploadPage() {
         variants: uploadedVariants,
         description: description.trim(),
         published,
-      });
+      }, editing ? { id: editing.id, existingCreatedAtMs: editing.createdAtMs } : {});
 
       setSaved({
         id,
@@ -341,16 +426,51 @@ export function AdminUploadPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button size="sm" onClick={resetForm}>
-            {t('admin.addAnother')}
-          </Button>
+          {editing ? (
+            <Button asChild size="sm">
+              <Link to={ROUTES.adminFrames}>{t('admin.edit.backToFrames')}</Link>
+            </Button>
+          ) : (
+            <Button size="sm" onClick={resetForm}>
+              {t('admin.addAnother')}
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
+  if (editId && !editing) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        {editMissing ? (
+          <>
+            <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
+            {t('admin.edit.notFound')}
+          </>
+        ) : (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            {t('common.loading')}
+          </>
+        )}
+      </p>
+    );
+  }
+
   return (
     <div className="max-w-3xl space-y-8">
+      {editing ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-medium text-foreground">
+            {t('admin.edit.heading', { code: editing.frameCode })}
+          </p>
+          <p className="mt-1 font-myanmar text-[0.8rem] leading-relaxed text-muted-foreground">
+            {editing.fromPos ? t('admin.edit.posNote') : t('admin.edit.note')}
+          </p>
+        </div>
+      ) : null}
+
       {errors.length > 0 ? (
         <div
           role="alert"
@@ -384,7 +504,7 @@ export function AdminUploadPage() {
             onChange={setBrand}
             placeholder="Plan B"
             required
-            disabled={saving}
+            disabled={saving || editing !== null}
           />
           <TextField
             label={t('admin.frameCodeLabel')}
@@ -393,7 +513,7 @@ export function AdminUploadPage() {
             placeholder="PBV-2041"
             hint={slug ? t('admin.slugPreview', { slug }) : t('admin.frameCodeHint')}
             required
-            disabled={saving}
+            disabled={saving || editing !== null}
           />
         </div>
 
@@ -530,7 +650,7 @@ export function AdminUploadPage() {
           <div>
             <h2 className="text-sm font-semibold text-foreground">{t('admin.sectionVariants')}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {t('admin.variantsNote', { min: MIN_IMAGES_PER_VARIANT })}
+              {editing ? t('admin.edit.variantsNote') : t('admin.variantsNote', { min: minImages })}
             </p>
           </div>
 
@@ -609,10 +729,41 @@ export function AdminUploadPage() {
               </div>
             </div>
 
+            {variant.existingImages.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">
+                  {t('admin.edit.savedPhotos', { count: variant.existingImages.length })}
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {variant.existingImages.map((url, photoIndex) => (
+                    <li key={url} className="relative h-20 w-24 overflow-hidden rounded-lg bg-muted">
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          updateVariant(variant.id, {
+                            existingImages: variant.existingImages.filter((u) => u !== url),
+                          })
+                        }
+                        aria-label={t('admin.edit.removePhoto', {
+                          number: photoIndex + 1,
+                          code: variant.cNumber,
+                        })}
+                        className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white transition-colors hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.4} aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <ImagePicker
               images={variant.images}
               onChange={(next) => updateVariant(variant.id, { images: next })}
-              minimum={MIN_IMAGES_PER_VARIANT}
+              minimum={Math.max(0, minImages - variant.existingImages.length)}
               label={t('admin.imagesLabel', { code: variant.cNumber || '—' })}
             />
 

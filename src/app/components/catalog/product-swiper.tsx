@@ -138,6 +138,11 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
       {/* ── Below the image: model, colour, Add to Cart, Buy ─────────────── */}
       <div className="shrink-0 border-t border-border bg-background px-4 pb-3 pt-3">
         <div className="mx-auto max-w-xl">
+          {frame.brand.trim() ? (
+            <p className="truncate text-[0.72rem] font-semibold uppercase tracking-wide text-primary">
+              {frame.brand.trim()}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <p className="min-w-0 truncate text-lg font-bold tracking-tight text-foreground" dir="ltr">
               {t('catalog.modelLabel')}: {frame.frameCode}

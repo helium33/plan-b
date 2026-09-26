@@ -411,6 +411,60 @@
   }
 }
 
+/*
+ * The greeting animations around the logo (`brand-greeting.tsx`):
+ *   - `pbwHalo`   a soft ring that breathes out from behind the logo;
+ *   - `pbwShine`  a band of light that sweeps once across the plate;
+ *   - `pbwWordIn` each word of the greeting arriving from a slight blur;
+ *   - `pbwBow`    the goodbye: the logo dips once, like a nod, and rises.
+ * All run only under `motion-safe:`.
+ */
+@keyframes pbwHalo {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes pbwShine {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+@keyframes pbwWordIn {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes pbwBow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  35% {
+    transform: translateY(8%) rotate(-4deg);
+  }
+  65% {
+    transform: translateY(-2%) rotate(2deg);
+  }
+}
+
 @layer utilities {
   /* Shared page gutter — keeps every section optically aligned. */
   .container-page {

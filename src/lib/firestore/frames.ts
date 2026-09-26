@@ -177,6 +177,7 @@ function normalizeFrame(id: string, data: Record<string, unknown>): FrameDoc {
 
     createdAtMs: asNumber(data.createdAtMs),
     published: data.published !== false,
+    fromPos: data.source === 'POS',
   };
 }
 

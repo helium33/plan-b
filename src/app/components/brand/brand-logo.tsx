@@ -11,8 +11,9 @@
  * within a shade of it and follows dark mode; the logo is a printed mark and
  * should look the same on every screen it appears on.
  *
- * This is the lockup for full-screen moments — sign-in, sign-out. The 32px
- * monogram in the bars stays `LogoMark`, which is sized for them.
+ * `BrandLogo` is the lockup for full-screen moments — opening the app,
+ * sign-in, sign-out. `BrandBadge` is the same mark cut down for a 32px bar:
+ * the glasses-B on its plate, with "PLAN B" over "VISION" beside it.
  */
 import { cn } from '@/app/components/ui/utils';
 
@@ -54,5 +55,57 @@ export function BrandLogo({ className }: { className?: string }) {
         <span className="text-[0.6rem] font-semibold tracking-[0.3em] text-white/90">EYEWEARS</span>
       </div>
     </div>
+  );
+}
+
+/**
+ * The compact lockup for headers, the sidebar and the voucher letterhead.
+ *
+ * `tone="light"` is for use on the logo colour itself (the voucher's
+ * letterhead), where the words go white and the plate goes translucent.
+ */
+export function BrandBadge({
+  className,
+  tone = 'default',
+  markOnly = false,
+}: {
+  className?: string;
+  tone?: 'default' | 'light';
+  markOnly?: boolean;
+}) {
+  return (
+    <span className={cn('flex min-w-0 items-center gap-2.5', className)}>
+      <span
+        style={tone === 'default' ? { backgroundColor: BRAND_LOGO_COLOR } : undefined}
+        className={cn(
+          'grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white shadow-sm',
+          tone === 'light' && 'bg-white/15',
+        )}
+      >
+        <GlassesMark className="h-6 w-4" />
+      </span>
+
+      {markOnly ? null : (
+        <span className="flex min-w-0 flex-col leading-none">
+          <span
+            className={cn(
+              'truncate text-[0.95rem] font-extrabold tracking-wide',
+              // The plate colour is too dark to read on the dark theme.
+              tone === 'light' ? 'text-white' : 'text-[#577A88] dark:text-white',
+            )}
+          >
+            PLAN B
+          </span>
+          <span
+            className={cn(
+              'mt-1 truncate text-[0.6rem] font-bold tracking-[0.28em]',
+              tone === 'light' ? 'text-white/75' : 'text-muted-foreground',
+            )}
+          >
+            VISION
+          </span>
+        </span>
+      )}
+    </span>
   );
 }

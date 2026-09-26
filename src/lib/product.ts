@@ -133,6 +133,13 @@ export type FrameDoc = {
   createdAtMs: number;
   /** Hides the frame from every buyer-facing query. */
   published: boolean;
+
+  /**
+   * Made by the POS catalogue sync (`lib/pos/catalog-sync.ts`) rather than
+   * uploaded here. Its price, colours and stock follow the POS; its photos,
+   * name and wording are the shop's to add in the edit form.
+   */
+  fromPos?: boolean;
 };
 
 /* ── Derived helpers ───────────────────────────────────────────────────────── */

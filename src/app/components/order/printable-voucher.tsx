@@ -23,7 +23,7 @@
  */
 import { useTranslation } from 'react-i18next';
 
-import { LogoMark } from '@/app/components/common/logo';
+import { GlassesMark } from '@/app/components/brand/brand-logo';
 import { env } from '@/lib/env';
 import { formatKyat, formatNumber } from '@/lib/format';
 import { frameDisplayName } from '@/lib/product';
@@ -79,7 +79,7 @@ export function PrintableVoucher({
         style={{ backgroundColor: BRAND_TEAL }}
       >
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15">
-          <LogoMark className="h-4 w-8 text-white" />
+          <GlassesMark className="h-7 w-4 text-white" />
         </span>
         <div className="min-w-0 leading-tight">
           <p className="truncate text-base font-bold tracking-wide text-white">

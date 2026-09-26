@@ -16,13 +16,16 @@ import {
   EyeOff,
   Loader2,
   Package,
+  Pencil,
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import { PosLinkPanel } from '@/app/components/admin/pos-link-panel';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
+import { ROUTES } from '@/app/config/navigation';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import { subscribeToFrames } from '@/lib/firestore/frames';
 import { deleteFrame, setFramePublished } from '@/lib/firestore/frame-writes';
@@ -145,6 +148,11 @@ export function AdminFramesPage() {
                       <p className="text-sm font-medium text-foreground">
                         {frameDisplayName(frame)}
                       </p>
+                      {frame.fromPos ? (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-primary">
+                          POS
+                        </span>
+                      ) : null}
                       {!frame.published ? (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                           {t('admin.hidden')}
@@ -172,6 +180,14 @@ export function AdminFramesPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {/* Where photos are added — POS frames arrive with none. */}
+                    <Button asChild variant={image ? 'outline' : 'default'} size="sm">
+                      <Link to={`${ROUTES.admin}?edit=${encodeURIComponent(frame.id)}`}>
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
+                        {image ? t('admin.edit.action') : t('admin.edit.addPhotos')}
+                      </Link>
+                    </Button>
+
                     <Button
                       type="button"
                       variant="outline"

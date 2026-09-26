@@ -12,7 +12,7 @@ import { FRAMES_COLLECTION, type FrameDoc, frameSlug } from '@/lib/product';
 import { deleteFrameMedia } from '@/lib/media/upload';
 
 /** Everything except the derived id, which comes from brand + frame code. */
-export type FrameInput = Omit<FrameDoc, 'id' | 'createdAtMs'>;
+export type FrameInput = Omit<FrameDoc, 'id' | 'createdAtMs' | 'fromPos'>;
 
 /**
  * Creates or overwrites a frame.
@@ -21,12 +21,16 @@ export type FrameInput = Omit<FrameDoc, 'id' | 'createdAtMs'>;
  * frame corrects the existing entry rather than creating a near-duplicate that
  * then appears twice in the shop. `createdAtMs` is preserved when one already
  * exists, so editing a frame does not shuffle it to the top of "newest".
+ *
+ * An edit passes the entry's own `id` and is *merged* into it, so fields this
+ * form does not know about — `source: 'POS'` above all, which keeps a synced
+ * frame's stock following the POS — survive the save.
  */
 export async function saveFrame(
   input: FrameInput,
-  options: { existingCreatedAtMs?: number } = {},
+  options: { existingCreatedAtMs?: number; id?: string } = {},
 ): Promise<{ id: string }> {
-  const id = frameSlug(input.brand, input.frameCode);
+  const id = options.id ?? frameSlug(input.brand, input.frameCode);
 
   await setDoc(doc(db, FRAMES_COLLECTION, id), {
     ...input,
@@ -36,7 +40,7 @@ export async function saveFrame(
     // which breaks `orderBy` on the very first read.
     createdAtMs: options.existingCreatedAtMs ?? Date.now(),
     updatedAt: serverTimestamp(),
-  });
+  }, { merge: options.id !== undefined });
 
   return { id };
 }

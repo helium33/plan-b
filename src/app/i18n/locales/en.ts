@@ -13,12 +13,12 @@
  */
 export const en = {
   brand: {
-    name: 'Plan B Wholesale',
+    name: 'Plan B Vision',
     tagline: 'Optical frames, by the dozen',
   },
 
   app: {
-    name: 'Plan B Wholesale',
+    name: 'Plan B Vision',
     tagline: 'Optical · Trade orders',
   },
 
@@ -129,6 +129,7 @@ export const en = {
   /* ── Catalogue ───────────────────────────────────────────────────────────── */
 
   catalog: {
+    seriesLabel: 'Frame names',
     all: 'All · အားလုံး',
     filterCategory: 'Who it is for · ဘယ်သူ့အတွက်',
     filterMaterial: 'Material · ပစ္စည်း',
@@ -361,6 +362,20 @@ export const en = {
   },
 
   admin: {
+    edit: {
+      action: 'Edit',
+      addPhotos: 'Add photos',
+      heading: 'Editing {{code}}',
+      note: 'Change anything below and save. Photos already saved stay unless you remove them.',
+      posNote:
+        'This frame comes from the POS. Add photos, a name and a description here — price, colours and stock keep following the POS.',
+      variantsNote: 'Add photos to any colour. New photos go after the ones already saved.',
+      savedPhotos_one: '{{count}} saved photo',
+      savedPhotos_other: '{{count}} saved photos',
+      removePhoto: 'Remove photo {{number}} of {{code}}',
+      backToFrames: 'Back to frames',
+      notFound: 'That frame no longer exists.',
+    },
     title: 'Catalogue admin',
     subtitle: 'Upload frames, manage what buyers can see.',
     tabs: { upload: 'Upload', frames: 'Frames', credit: 'Credit', seed: 'Sample data' },

@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { FilterBar } from '@/app/components/catalog/filter-bar';
 import { ProductModal } from '@/app/components/catalog/product-modal';
 import { ProductSwiper } from '@/app/components/catalog/product-swiper';
+import { SeriesChips } from '@/app/components/catalog/series-chips';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
@@ -109,6 +110,7 @@ export function CatalogPage() {
     >
       <div className="z-10 shrink-0 border-b border-border bg-background/95 backdrop-blur-md">
         <FilterBar savedCount={favouriteIds.length} />
+        <SeriesChips frames={frames ?? []} />
       </div>
 
       <div className="min-h-0 flex-1">
