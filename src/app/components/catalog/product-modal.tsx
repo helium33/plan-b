@@ -55,10 +55,13 @@ function Spec({ label, value }: { label: string; value: string }) {
 
 export function ProductModal({
   frame,
+  initialColour = null,
   onClose,
 }: {
   /** The model being shown, or `null` when the modal is closed. */
   frame: FrameDoc | null;
+  /** The C-number to show first — the colour the buyer was looking at. */
+  initialColour?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -72,7 +75,7 @@ export function ProductModal({
 
   // Reset the shown colour whenever a different model is opened, or the next
   // model inherits the last one's selection and shows the wrong photo first.
-  useEffect(() => setShownC(null), [frame?.id]);
+  useEffect(() => setShownC(initialColour), [frame?.id, initialColour]);
 
   if (!frame) return null;
 

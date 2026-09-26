@@ -11,6 +11,8 @@
  */
 import { create } from 'zustand';
 
+import type { PosRole } from '@/lib/pos/schema';
+
 /**
  * A plain snapshot of the Firebase `User`.
  *
@@ -28,6 +30,19 @@ export type AuthUser = {
 };
 
 /**
+ * The custom claims on the ID token — the same two values `firestore.rules`
+ * reads. `null` until the token has been decoded, and for accounts the POS has
+ * not given a role.
+ */
+export type AuthClaims = {
+  role: PosRole | null;
+  /** The POS shop a `SHOP` account belongs to. */
+  shopId: string | null;
+};
+
+export const NO_CLAIMS: AuthClaims = { role: null, shopId: null };
+
+/**
  * `loading` covers the gap between first paint and Firebase restoring the
  * session from IndexedDB. Route guards must wait it out — treating it as
  * signed-out bounces a signed-in admin to the sign-in page on every refresh.
@@ -37,13 +52,31 @@ export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 type AuthState = {
   status: AuthStatus;
   user: AuthUser | null;
+  claims: AuthClaims;
+  /** False until the claims for the current user have been read at least once. */
+  claimsReady: boolean;
   setSession: (user: AuthUser | null) => void;
+  setClaims: (claims: AuthClaims) => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   status: 'loading',
   user: null,
+  claims: NO_CLAIMS,
+  claimsReady: false,
 
+  // A different user always starts with no claims: carrying the previous
+  // user's role across a sign-out would, for one render, show the next person
+  // the last person's shop. The same user keeps theirs while they are re-read,
+  // so a repeat notification from Firebase does not flicker the Credit tab.
   setSession: (user) =>
-    set(user ? { status: 'authenticated', user } : { status: 'unauthenticated', user: null }),
+    set((state) =>
+      !user
+        ? { status: 'unauthenticated', user: null, claims: NO_CLAIMS, claimsReady: true }
+        : state.user?.uid === user.uid
+          ? { status: 'authenticated', user }
+          : { status: 'authenticated', user, claims: NO_CLAIMS, claimsReady: false },
+    ),
+
+  setClaims: (claims) => set({ claims, claimsReady: true }),
 }));

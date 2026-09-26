@@ -1,193 +1,432 @@
 rules_version = '2';
 
-// Plan B Wholesale — Firestore security rules.
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  SHARED RULESET — keep byte-identical in BOTH repositories:              ║
+// ║    helium33/visionary  (the POS / ERP)                                   ║
+// ║    helium33/plan-b     (the customer & sales-rep web app)                ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
 //
-// Deploy with:  firebase deploy --only firestore:rules
+// Both apps read and write ONE Firestore database. Firestore has exactly one
+// ruleset per database, and `firebase deploy --only firestore:rules` from
+// either repo REPLACES it wholesale. So this file must describe both apps: a
+// POS-only ruleset deployed from visionary would lock the web app out of its
+// catalogue, and a web-only ruleset deployed from plan-b would lock every rep
+// out of the POS. Edit it in one repo, copy it to the other, deploy once.
 //
-// ── The whole data model, in one paragraph ────────────────────────────────────
+// Role comes from a custom auth claim (mirrored from users/{uid}.role by the
+// POS's `npm run set-role`), never from a document read: reading the role on
+// every rule evaluation would cost a document read per operation and can be
+// stale in the offline cache. Claims used:
 //
-// Three collections. `frames` is the catalogue — world-readable, staff-writable.
-// `users` is a self-owned profile written on sign-in, which grants nothing.
-// `admins` is the allowlist, readable by the person it names and writable only
-// by someone who is already an admin.
+//   role    'ADMIN' | 'SALES' | 'ACCOUNTANT' | 'WAREHOUSE'   POS staff
+//           'SHOP'                                          a customer account
+//   shopId  the shops/{id} a SHOP account belongs to
 //
-// Orders are absent on purpose: a wholesale order lives in the buyer's own
-// browser and leaves over Telegram or Viber, so there is no order collection and
-// nothing a client could tamper with.
-//
-// ── Why permissions are not a field on the user document ─────────────────────
-//
-// A user must be able to write their own profile. If the same document also
-// carried `role`, then "may write their own document" and "may not grant
-// themselves the catalogue" become one rule that has to be right about every
-// field forever. Splitting them means `users` can be permissive and `admins` can
-// be near-immutable, and neither has to know about the other.
-
+// The web app's catalogue admins keep their own allowlist (the bootstrap
+// emails and admins/{uid}); that grants the catalogue only, never POS data.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /* ── Helpers ─────────────────────────────────────────────────────────── */
+    // ================================================================ helpers
 
-    function isSignedIn() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    // ⚠️ Mirror of BOOTSTRAP_ADMIN_EMAILS in src/config/admins.ts.
-    // Security rules cannot import TypeScript, so this list is duplicated in
-    // three places: there, here, and storage.rules. Change one, change all three
-    // — and remember Firestore and Storage are separate deploys.
-    //
-    // `email_verified` is required. Without it, anyone could register an
-    // email/password account claiming this address and inherit the catalogue.
-    // Google sign-in sets the flag automatically; email/password sets it only
-    // after the emailed link is clicked.
+    // `.get()` rather than `.role`: a token with no claim at all must read as
+    // "no role", not as an evaluation error.
+    function role() {
+      return request.auth.token.get('role', '');
+    }
+
+    function isAdmin()      { return signedIn() && role() == 'ADMIN'; }
+    function isAccountant() { return signedIn() && role() == 'ACCOUNTANT'; }
+    function isSales()      { return signedIn() && role() == 'SALES'; }
+    function isWarehouse()  { return signedIn() && role() == 'WAREHOUSE'; }
+    function isStaff()      { return isAdmin() || isAccountant() || isSales() || isWarehouse(); }
+
+    // A customer account. The shopId claim is required: a SHOP token without
+    // one is half-provisioned and gets nothing.
+    function myShopId()     { return request.auth.token.get('shopId', ''); }
+    function isShop()       { return signedIn() && role() == 'SHOP' && myShopId() != ''; }
+
+    function shopDoc(shopId) {
+      return get(/databases/$(database)/documents/shops/$(shopId)).data;
+    }
+
+    function voucherAfter(voucherId) {
+      return getAfter(/databases/$(database)/documents/vouchers/$(voucherId)).data;
+    }
+
+    // The cached lock flag plus a live override. This is the cheap layer of
+    // the three described in docs/FIRESTORE_SCHEMA.md §2.3 — the authoritative
+    // check is onVoucherWrite, which sees the true clock.
+    function shopAcceptsCredit(shopId) {
+      let credit = shopDoc(shopId).get('credit', {});
+      return credit.get('lockedUntilPaid', false) != true
+        || (credit.get('override', null) != null
+            && credit.override.expiresAt > request.time);
+    }
+
+    function unchanged(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == resource.data[field];
+    }
+
+    // ⚠️ Mirror of BOOTSTRAP_ADMIN_EMAILS in plan-b's src/config/admins.ts and
+    // of storage.rules there. `email_verified` is required, or anyone could
+    // register an email/password account claiming the address.
     function isBootstrapAdmin() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in [
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', '') in [
              'kyawwinhtun56@gmail.com',
              'kyawwinhtun564@gmail.com'
            ];
     }
 
-    // Staff are listed by uid in `admins/{uid}`. An allowlist collection rather
-    // than a custom claim because claims need the Admin SDK to set, which would
-    // mean a service-account key on someone's laptop; a document can be created
-    // from the admin page and revoked just as fast.
-    //
-    // The document's contents are irrelevant — existence is the grant.
-    function isAdmin() {
-      return isBootstrapAdmin()
-        || (isSignedIn()
-            && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    // The web app's catalogue editors: a POS admin, the bootstrap owner, or an
+    // admins/{uid} allowlist entry. Grants frames / admins / the legacy credit
+    // ledger — nothing in the POS collections below.
+    function isCatalogueAdmin() {
+      return isAdmin()
+        || isBootstrapAdmin()
+        || (signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
 
-    /* ── users/{uid} — who has signed in ─────────────────────────────────── */
+    // ================================================================= users
     //
-    // Written by `lib/firestore/users.ts` on each new session. Any Google account
-    // may create and maintain its **own** document and read nothing else.
-    //
-    // `list` is denied: a queryable users collection is an email directory for
-    // every buyer the shop has, and nothing in the app needs to enumerate it.
-    //
-    // The `uid` field is pinned to the document id so a record cannot be written
-    // claiming to be somebody else, and the writable fields are enumerated so
-    // this document can never grow a `role` or `isAdmin` that some future rule
-    // might be tempted to trust. Admin status lives in `admins/{uid}` only.
-
+    // One document per account, shared by both apps. The POS keeps the staff
+    // profile here (role, repCode, townships — admin-written); the web app
+    // records who signed in (profile fields only, self-written). A user may
+    // touch only the profile fields, so nobody can write themselves a role —
+    // and the role that matters is the token claim anyway.
     match /users/{uid} {
-      allow get: if isSignedIn() && request.auth.uid == uid;
-      allow list: if false;
+      function profileOnly(keys) {
+        return keys.hasOnly(['uid', 'email', 'displayName', 'photoURL', 'emailVerified', 'lastSignInAt']);
+      }
 
-      allow create, update: if isSignedIn()
-        && request.auth.uid == uid
-        && request.resource.data.uid == uid
-        && request.resource.data.keys().hasOnly([
-             'uid', 'email', 'displayName', 'photoURL', 'emailVerified', 'lastSignInAt'
-           ]);
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
 
-      // Account deletion is a support conversation, not a client operation.
-      allow delete: if false;
+      allow create: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.get('uid', uid) == uid
+            && profileOnly(request.resource.data.keys()));
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.get('uid', uid) == uid
+            && profileOnly(request.resource.data.diff(resource.data).affectedKeys()));
+      allow delete: if isAdmin();
 
-      /* ── users/{uid}/orders/{reference} — the buyer's own history ─────── */
-      //
-      // Nested under the owner, so ownership is the path rather than a field
-      // that has to be checked — there is no way to address someone else's
-      // order at all.
-      //
-      // `list` is allowed here, unlike on `users` itself: a buyer must be able
-      // to page their own history, and the collection is already scoped to them.
-      //
-      // Deliberately **not** validated field by field. This is the buyer's own
-      // record of what they sent; the shop's authoritative copy is the Telegram
-      // message. Constraining the shape here would mean editing the rules every
-      // time the voucher gains a line, for a document only its owner can read.
-
+      // The web app buyer's own order history. Ownership is the path.
       match /orders/{reference} {
-        allow read, write: if isSignedIn() && request.auth.uid == uid;
+        allow read, write: if signedIn() && request.auth.uid == uid;
       }
     }
 
-    /* ── admins/{uid} ────────────────────────────────────────────────────── */
-    //
-    // Readable by the signed-in staff member it names, so the app can show or
-    // hide admin tools. Never writable by a buyer — a client that could create
-    // its own entry here would be able to grant itself the catalogue.
+    // ================================================================= shops
+    match /shops/{shopId} {
+      allow read: if isAdmin() || isAccountant() || isWarehouse()
+        || (isSales() && resource.data.salesRepId == request.auth.uid)
+        || (isShop() && myShopId() == shopId);
 
-    match /admins/{uid} {
-      allow get: if isSignedIn() && request.auth.uid == uid;
-      allow list: if false;
+      allow create: if isAdmin() || isSales();
 
-      // An existing admin may grant staff access, including the bootstrap owner
-      // promoting their own account so the record persists beyond the email list.
-      // `uid == request.auth.uid` is NOT required, so an admin can add a
-      // colleague by uid — but only an admin can, which is the point.
-      allow create: if isAdmin();
+      // credit.override is written by the grantCreditOverride callable only.
+      // A client that could set it could unlock itself, which would make the
+      // master password decorative.
+      allow update: if ((isAdmin() || isAccountant()
+                        || (isSales() && resource.data.salesRepId == request.auth.uid))
+                       && unchanged('credit.override')
+                       && !(request.resource.data.get('credit', {}).diff(resource.data.get('credit', {}))
+                             .affectedKeys().hasAny(['override'])))
+        || (isShop() && myShopId() == shopId && webPurchaseShopUpdate());
 
-      // Deletion is deliberately excluded. Revoking access is a decision that
-      // should be made in the console with a moment's thought, not one click away
-      // from an admin who could otherwise lock everyone out, themselves included.
+      // A shop's own web order may raise its balance by exactly that order —
+      // no more, never past the credit limit, and only alongside the voucher
+      // it names (`credit.lastWebVoucherId`), created in the same batch.
+      function webPurchaseShopUpdate() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let beforeCredit = before.get('credit', {});
+        let afterCredit = after.get('credit', {});
+        let beforeStats = before.get('stats', {});
+        let afterStats = after.get('stats', {});
+        let voucher = voucherAfter(afterCredit.get('lastWebVoucherId', 'none'));
+        return after.diff(before).affectedKeys().hasOnly(['credit', 'stats'])
+          && afterCredit.diff(beforeCredit).affectedKeys()
+               .hasOnly(['outstanding', 'recalcAt', 'lastWebVoucherId'])
+          && afterStats.diff(beforeStats).affectedKeys()
+               .hasOnly(['lastPurchaseAt', 'lifetimeSales', 'voucherCount'])
+          && voucher.shopId == shopId
+          && voucher.channel == 'WEB'
+          && voucher.createdBy == request.auth.uid
+          && afterCredit.outstanding == beforeCredit.get('outstanding', 0) + voucher.balanceDue
+          && afterStats.get('lifetimeSales', 0) == beforeStats.get('lifetimeSales', 0) + voucher.grandTotal
+          && afterStats.get('voucherCount', 0) == beforeStats.get('voucherCount', 0) + 1
+          && (before.get('creditLimit', 0) == 0 || afterCredit.outstanding <= before.creditLimit);
+      }
+
+      allow delete: if false; // deactivate instead — history must survive
+
+      match /ledger/{entryId} {
+        allow read: if isAdmin() || isAccountant()
+          || (isSales() && shopDoc(shopId).salesRepId == request.auth.uid)
+          || (isShop() && myShopId() == shopId);
+        allow create: if isAdmin() || isAccountant() || isSales()
+          || (isShop() && myShopId() == shopId
+              && request.resource.data.type == 'VOUCHER'
+              && request.resource.data.credit == 0
+              && voucherAfter(request.resource.data.refId).shopId == shopId
+              && request.resource.data.debit == voucherAfter(request.resource.data.refId).grandTotal);
+        allow update, delete: if false; // append-only
+      }
+    }
+
+    // ============================================================== vouchers
+    match /vouchers/{voucherId} {
+      allow read: if isAdmin() || isAccountant() || isWarehouse()
+        || (isSales() && resource.data.salesRepId == request.auth.uid)
+        || (isShop() && resource.data.shopId == myShopId());
+
+      // THE CREDIT GATE. Consignment moves sample stock and carries no debt,
+      // so it is never blocked by ageing.
+      allow create: if ((isAdmin() || isSales())
+          && request.resource.data.shopId is string
+          && (request.resource.data.type == 'CONSIGNMENT'
+              || shopAcceptsCredit(request.resource.data.shopId)))
+        || (isShop() && webVoucherCreate());
+
+      // A shop orders for itself, on credit, as a plain SALE billed to its own
+      // rep. The arithmetic must add up; the only discount a shop's own order
+      // may carry is the 2% on-time-payment coupon. Line prices cannot be
+      // checked here (rules cannot loop) — that belongs to onVoucherWrite.
+      function webVoucherCreate() {
+        let v = request.resource.data;
+        return v.shopId == myShopId()
+          && v.channel == 'WEB'
+          && v.type == 'SALE'
+          && v.status == 'ISSUED'
+          && v.createdBy == request.auth.uid
+          && v.salesRepId == shopDoc(myShopId()).get('salesRepId', null)
+          && v.items is list && v.items.size() > 0 && v.items.size() <= 240
+          && v.subtotal is int && v.subtotal > 0
+          && v.discount is int && v.discount >= 0
+          && (v.discount == 0
+              || (v.discountReason == 'LOYALTY_ON_TIME' && v.discount <= v.subtotal * 0.02 + 1))
+          && v.grandTotal == v.subtotal - v.discount
+          && v.paidAmount == 0
+          && v.paymentAtIssue == 0
+          && v.balanceDue == v.grandTotal
+          && shopAcceptsCredit(myShopId());
+      }
+
+      // A rep may correct their own voucher on the day it was issued; after
+      // that, corrections go through the accountant so the debt position is
+      // not rewritten behind the office's back. The one exception is a
+      // defective-goods credit note, which may lower the balance of the rep's
+      // own shop's vouchers on any day — `returnVoucherUpdate`.
+      allow update: if isAdmin() || isAccountant()
+        || (isSales()
+            && resource.data.salesRepId == request.auth.uid
+            && resource.data.status in ['DRAFT', 'ISSUED']
+            && resource.data.issueDate > request.time - duration.value(1, 'd'))
+        || (isSales()
+            && resource.data.salesRepId == request.auth.uid
+            && returnVoucherUpdate());
+
+      function returnVoucherUpdate() {
+        let after = request.resource.data;
+        return after.diff(resource.data).affectedKeys().hasOnly([
+                 'balanceDue', 'creditedAmount', 'status', 'settledAt',
+                 'updatedAt', 'returnedQty', 'lastCreditNoteId'])
+          && after.get('balanceDue', 0) >= 0
+          && after.get('balanceDue', 0) <= resource.data.get('balanceDue', 0)
+          && after.status in ['ISSUED', 'PARTIAL', 'PAID', 'OVERDUE']
+          && existsAfter(/databases/$(database)/documents/creditNotes/$(after.lastCreditNoteId));
+      }
+
+      allow delete: if false; // void, never delete
+    }
+
+    // ============================================================== payments
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || isAccountant()
+        || (isSales() && resource.data.receivedBy == request.auth.uid);
+      allow create: if isAdmin() || isAccountant() || isSales();
+      allow update, delete: if false; // reverse with a credit note instead
+    }
+
+    match /creditNotes/{noteId} {
+      allow read: if isAdmin() || isAccountant() || isSales()
+        || (isShop() && resource.data.shopId == myShopId());
+      // A rep may issue the one kind of credit note that a return of their own
+      // shop's defective goods produces; everything else is the office's.
+      allow create: if isAdmin() || isAccountant()
+        || (isSales()
+            && request.resource.data.reason == 'RETURN_DEFECTIVE'
+            && shopDoc(request.resource.data.shopId).salesRepId == request.auth.uid);
       allow update, delete: if false;
     }
 
-    /* ── frames/{frameId} — the catalogue ────────────────────────────────── */
+    // ============================================================= inventory
     //
-    // Public read: buyers browse without an account, by design — the app has no
-    // buyer sign-in at all. Nothing here is sensitive beyond the trade price,
-    // which is on the price list every stockist already holds.
-    //
-    // If trade prices must not be public, the fix is a buyer login and a rule
-    // requiring it — not obscurity in the client, which stops nobody.
-    //
-    // Writes are staff-only. Field validation is intentionally light because the
-    // upload form is the only writer and `normalizeFrame` in
-    // `lib/firestore/frames.ts` already defends every read; duplicating the full
-    // schema here would mean two places to update for every new attribute.
+    // products carry landed cost, so they are staff-only: a shop must never be
+    // able to read what a frame cost. variants carry stock only and stay
+    // readable to shops, which is all a web order needs.
+    match /products/{productId} {
+      allow read: if isStaff();
+      allow write: if isAdmin() || isWarehouse();
 
-    match /frames/{frameId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      match /variants/{colorCode} {
+        allow read: if isStaff() || isShop();
+        // Sales reps decrement stock as a side effect of issuing a voucher,
+        // so they need write access to the stock map — but nothing else.
+        allow create, delete: if isAdmin() || isWarehouse();
+        allow update: if isAdmin() || isWarehouse()
+          || (isSales() && request.resource.data.diff(resource.data)
+                .affectedKeys().hasOnly(['stock', 'reserved', 'lastSaleRef']))
+          || (isShop() && webStockDecrement());
+
+        // A shop's web order may only take sellable stock DOWN, never below
+        // zero, and only alongside a voucher of its own in the same batch.
+        // Because `increment()` resolves before the rules run, two shops
+        // racing for the last pieces cannot both pass: the second batch would
+        // take the count negative and is refused whole.
+        function webStockDecrement() {
+          let before = resource.data.get('stock', {});
+          let after = request.resource.data.get('stock', {});
+          let sale = voucherAfter(request.resource.data.get('lastSaleRef', 'none'));
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'lastSaleRef'])
+            && after.diff(before).affectedKeys().hasOnly(['LOC-MAIN'])
+            && after['LOC-MAIN'] < before.get('LOC-MAIN', 0)
+            && after['LOC-MAIN'] >= 0
+            && sale.shopId == myShopId()
+            && sale.createdBy == request.auth.uid;
+        }
+      }
     }
 
-    /* ── creditShops/{id}, creditOrders/{id} — the wholesale credit ledger ── */
-    //
-    // Staff-only, full stop: no public read, unlike `frames`. A shop's credit
-    // limit and running balance are not information a catalogue browser has any
-    // reason to see, and unlike the catalogue there is no "buyer view" of this
-    // data at all — a shop's own copy of a voucher is the message they were
-    // sent over Telegram, not a page they sign in and read.
-    //
-    // Field validation is intentionally light, same reasoning as `frames`: the
-    // admin credit page is the only writer, and `lib/firestore/credit.ts`
-    // already normalises every read defensively. `creditOrders` additionally
-    // denies `update` outright — a saved voucher is a record of what was agreed
-    // with a shop, and letting it be edited after the fact would mean the
-    // number a shop was quoted and the number in the ledger could silently
-    // diverge. Only `delete` is allowed, for removing a mistaken entry, and
-    // deleting is a deliberate, visible act rather than the kind of quiet edit
-    // a stale-looking record invites.
+    // COLLECTION-GROUP READ. The nested rule above authorises
+    // products/{id}/variants/{code} by path; it does NOT authorise a
+    // collectionGroup('variants') query, which Firestore treats as a separate
+    // target. The inventory screen needs the whole matrix in one listener, so
+    // that query is granted here. Reads only — writes still go through the
+    // nested rule, which is narrower. `variants` exists nowhere else in the
+    // schema, so the recursive wildcard cannot reach anything unintended.
+    match /{path=**}/variants/{colorCode} {
+      allow read: if isStaff();
+    }
 
+    match /inventoryMoves/{moveId} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || isWarehouse() || isSales()
+        || (isShop()
+            && request.resource.data.channel == 'WEB'
+            && request.resource.data.type == 'SALE'
+            && request.resource.data.qty < 0
+            && voucherAfter(request.resource.data.refId).shopId == myShopId());
+      allow update, delete: if false; // the stock journal is immutable
+    }
+
+    // One record per returned-defective line, created by processReturn in the
+    // web app alongside the credit note and the LOC-DAMAGED stock move. The
+    // warehouse moves `status` on as it inspects; nothing is ever deleted.
+    match /damaged_stock/{recordId} {
+      allow read: if isAdmin() || isAccountant() || isWarehouse()
+        || (isSales() && resource.data.salesRepId == request.auth.uid);
+      allow create: if isAdmin() || isWarehouse()
+        || (isSales()
+            && request.resource.data.salesRepId == request.auth.uid
+            && shopDoc(request.resource.data.shopId).salesRepId == request.auth.uid
+            && existsAfter(/databases/$(database)/documents/creditNotes/$(request.resource.data.creditNoteId)));
+      allow update: if isAdmin() || isWarehouse();
+      allow delete: if false;
+    }
+
+    match /stockLocations/{locationId} {
+      allow read: if isStaff();
+      allow write: if isAdmin() || isWarehouse();
+    }
+
+    // A rep's day out with a car bag. Reps open, load and settle their own
+    // trips only (and their queries filter on repId to match); a trip is
+    // never reassigned or deleted — settlement history must survive.
+    match /carTrips/{tripId} {
+      allow read: if isAdmin() || (isSales() && resource.data.repId == request.auth.uid);
+      allow create: if isAdmin()
+        || (isSales() && request.resource.data.repId == request.auth.uid);
+      allow update: if (isAdmin() || (isSales() && resource.data.repId == request.auth.uid))
+        && request.resource.data.repId == resource.data.repId;
+      allow delete: if false;
+    }
+
+    // ================================================= purchasing & finance
+    match /purchaseOrders/{poId} {
+      allow read: if isAdmin() || isAccountant() || isWarehouse();
+      allow write: if isAdmin() || isWarehouse();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin() || isAccountant();
+    }
+
+    match /dailyRollups/{day} {
+      allow read: if isAdmin() || isAccountant();
+      allow write: if false; // written by the nightly Cloud Function only
+    }
+
+    // ============================================================ audit log
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if false; // admins included — this is the point
+    }
+
+    // ============================================================= settings
+    match /settings/{docId} {
+      // masterPasswordHash lives here; the callable reads it with admin
+      // credentials, so no client ever needs read access to this document.
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ============================================ web app: catalogue & links
+
+    // The web catalogue. Public read — buyers browse without an account.
+    match /frames/{frameId} {
+      allow read: if true;
+      allow write: if isCatalogueAdmin();
+    }
+
+    // frames/{id} → the POS product it is (see plan-b lib/pos/catalog-link.ts).
+    // Holds a product id and nothing else, so it can be read by the shops that
+    // need it to order without exposing anything a product document carries.
+    match /posLinks/{frameId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isCatalogueAdmin();
+    }
+
+    // The web app's catalogue-editor allowlist. Readable by the person it
+    // names; created only by an existing catalogue admin; never edited or
+    // deleted from a client.
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create: if isCatalogueAdmin();
+      allow update, delete: if false;
+    }
+
+    // The web app's older, staff-only credit ledger (one running balance per
+    // shop). Kept working until its data is migrated to shops/vouchers.
     match /creditShops/{shopId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isCatalogueAdmin();
     }
 
     match /creditOrders/{orderId} {
-      allow read, create, delete: if isAdmin();
+      allow read, create, delete: if isCatalogueAdmin();
       allow update: if false;
-    }
-
-    /* ── Everything else ─────────────────────────────────────────────────── */
-    //
-    // Denied by default, including the retail collections this app used to have
-    // (`members`, `memberIndex`, `appointments`, `reviews`). Leaving their rules
-    // in place after the features were deleted would keep granting access to data
-    // nothing writes and nobody reads — an attack surface with no upside.
-    //
-    // Note this also covers `admins` *listing* and any collection added later:
-    // a new feature has to add its rule deliberately rather than inherit one.
-
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

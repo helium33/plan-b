@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { PosLinkPanel } from '@/app/components/admin/pos-link-panel';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
@@ -105,6 +106,8 @@ export function AdminFramesPage() {
 
       {frames && frames.length > 0 ? (
         <>
+          <PosLinkPanel frames={frames} />
+
           <p className="mb-4 text-sm text-muted-foreground">
             {t('admin.frameCount', {
               total: frames.length,

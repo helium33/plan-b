@@ -12,7 +12,7 @@
  * Nothing about the total is stored, so the voucher cannot quote a price the
  * catalogue no longer offers.
  */
-import { useCallback, useMemo, useRef } from 'react';
+import { Suspense, lazy, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ReceiptText, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -31,11 +31,21 @@ import { ROUTES } from '@/app/config/navigation';
 import { useAuth } from '@/app/hooks/use-auth';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import { useFrames } from '@/app/hooks/use-frames';
+import { useRole } from '@/app/hooks/use-role';
 import { selectedBranch, useOrderStore } from '@/app/stores/order-store';
 import { orderReference, resolveShipTo } from '@/lib/dispatch';
 import { saveOrder } from '@/lib/firestore/orders';
 import { frameDisplayName } from '@/lib/product';
 import { priceOrder } from '@/lib/wholesale';
+
+/**
+ * Ordering on credit, loaded only for accounts that can. It carries the POS
+ * integration — stock lookups, the credit rules, the batch write — which a
+ * buyer who sends orders over Telegram never runs and should not download.
+ */
+const CreditCheckout = lazy(() =>
+  import('@/app/components/credit/credit-checkout').then((m) => ({ default: m.CreditCheckout })),
+);
 
 /* ── Page ──────────────────────────────────────────────────────────────────── */
 
@@ -45,6 +55,7 @@ export function OrderPage() {
 
   const { frames, failed } = useFrames();
   const { user } = useAuth();
+  const { ready: roleReady, can } = useRole();
 
   const quantities = useOrderStore((s) => s.quantities);
   const shop = useOrderStore((s) => s.shop);
@@ -214,6 +225,14 @@ export function OrderPage() {
           />
         )}
       </div>
+
+      {/* Accounts with a POS credit account order straight into it; everyone
+          else — and anyone who prefers — still sends it over Telegram below. */}
+      {roleReady && can('purchase:credit') ? (
+        <Suspense fallback={null}>
+          <CreditCheckout totals={totals} note={shop.note} />
+        </Suspense>
+      ) : null}
 
       <ShopDetailsForm />
 
