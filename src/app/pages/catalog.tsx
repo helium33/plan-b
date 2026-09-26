@@ -1,28 +1,29 @@
 /**
  * The catalogue — ငါတို့ကိုင်း. The app's landing page.
  *
- * ── One product per row ────────────────────────────────────────────────────
- * The feed shows a big picture, the model number, and one button. That is the
- * whole page. It replaced a five-across grid whose cards were about 160px wide
- * on a phone — enough to prove a frame existed, not enough to decide anything
- * about it, so buyers opened every model just to see it properly.
+ * ── One product per screen ─────────────────────────────────────────────────
+ * The catalogue is a vertical swiper: one frame fills the screen, the next is
+ * a flick away (see `product-swiper.tsx`). It replaced a single-column feed,
+ * which replaced a five-across grid — each step removing whatever competed
+ * with the one question the catalogue is for, "do I like the look of this?".
+ * Price, material and size live in the order sheet Buy opens.
  *
- * Everything that used to sit under each card — price, material, shape, colour
- * count — moved into the modal. None of it helped answer the only question the
- * feed is for, which is "do I like the look of this one?".
+ * ── New arrivals and best sellers ──────────────────────────────────────────
+ * Badges on the slide rather than shelves of their own: a shelf of small cards
+ * is exactly the shape this layout exists to get rid of. `selectNewArrivals`
+ * decides which frames are new, so the badge stops appearing on its own.
  *
- * ── What is not here any more, and why ─────────────────────────────────────
- * The New Arrivals and Best Sellers rails are gone. They were horizontal strips
- * of small cards, which is precisely the shape this layout exists to get rid
- * of, and at one product per row they would have pushed the catalogue itself
- * two screens down. Best sellers keep a badge on the row instead, so the
- * information survives without a second layout carrying it.
+ * ── What stayed ────────────────────────────────────────────────────────────
+ * Search and the attribute filters, in the sticky row and the sidebar. At one
+ * model per screen, finding a specific code by swiping stops being viable
+ * somewhere around thirty frames.
  *
- * ── What stayed, against the letter of the brief ───────────────────────────
- * Search and the attribute filters. They are not *in* the feed — they are in
- * the sticky row and the sidebar — and a single-column catalogue is the layout
- * that needs them most: at roughly one model per screen, finding a specific
- * code by scrolling stops being viable somewhere around thirty frames.
+ * ── Sizing ─────────────────────────────────────────────────────────────────
+ * The swiper must fill exactly the space between the header and the bottom
+ * bar, or a slide's Buy button ends up under the bar. `main` pads the bottom
+ * by 5rem on a phone (the bar) and 2rem on a desktop; the header is 3.5rem.
+ * With a draft in progress, the running-total bar and the cart button float
+ * above the tab bar too, so the swiper gives up that much more.
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -31,8 +32,9 @@ import { useTranslation } from 'react-i18next';
 
 import { FilterBar } from '@/app/components/catalog/filter-bar';
 import { ProductModal } from '@/app/components/catalog/product-modal';
-import { ProductRow } from '@/app/components/catalog/product-row';
+import { ProductSwiper } from '@/app/components/catalog/product-swiper';
 import { Button } from '@/app/components/ui/button';
+import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import { useFrames } from '@/app/hooks/use-frames';
@@ -42,28 +44,17 @@ import { useFavouritesStore } from '@/app/stores/favourites-store';
 import { draftPieceCount, useOrderStore } from '@/app/stores/order-store';
 import { hasAnyFilter, queryCatalog } from '@/lib/catalog-query';
 import { formatKyat } from '@/lib/format';
-import type { FrameDoc } from '@/lib/product';
+import { selectNewArrivals, type FrameDoc } from '@/lib/product';
 import { priceOrder } from '@/lib/wholesale';
 
-/** Rows rendered with eager images — roughly the first screenful, which at this
-    size is one row and the top of the next. */
-const EAGER_ROWS = 2;
-
-function FeedSkeleton() {
+function SwiperSkeleton() {
   return (
-    <div className="space-y-6" aria-hidden="true">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div
-          key={index}
-          className="overflow-hidden border-y border-border bg-card sm:rounded-3xl sm:border"
-        >
-          <div className="aspect-[4/3] w-full animate-pulse bg-muted" />
-          <div className="flex items-center justify-between gap-4 p-4">
-            <div className="h-5 w-32 animate-pulse rounded bg-muted" />
-            <div className="h-12 w-40 animate-pulse rounded-2xl bg-muted" />
-          </div>
-        </div>
-      ))}
+    <div className="relative h-full bg-white" aria-hidden="true">
+      <div className="absolute inset-x-8 bottom-44 top-16 animate-pulse rounded-3xl bg-muted" />
+      <div className="absolute inset-x-3 bottom-3 space-y-2 rounded-3xl border border-border bg-card p-3">
+        <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+        <div className="h-12 w-full animate-pulse rounded-2xl bg-muted" />
+      </div>
     </div>
   );
 }
@@ -83,8 +74,8 @@ export function CatalogPage() {
   const quantities = useOrderStore((s) => s.quantities);
   const favouriteIds = useFavouritesStore((s) => s.ids);
 
-  /** The model whose modal is open. `null` when the feed is just a feed. */
-  const [opened, setOpened] = useState<FrameDoc | null>(null);
+  /** The model whose order sheet is open, and the colour it opens on. */
+  const [opened, setOpened] = useState<{ frame: FrameDoc; colour: string | null } | null>(null);
 
   const visible = useMemo(
     () => queryCatalog(frames ?? [], filters, favouriteIds),
@@ -100,19 +91,29 @@ export function CatalogPage() {
   // open time, so a stock or colour change lands in an open modal instead of
   // being frozen behind it.
   const openedFrame = useMemo(
-    () => (opened ? (frames ?? []).find((f) => f.id === opened.id) ?? opened : null),
+    () => (opened ? (frames ?? []).find((f) => f.id === opened.frame.id) ?? opened.frame : null),
     [opened, frames],
   );
 
+  const newIds = useMemo(
+    () => new Set(selectNewArrivals(frames ?? []).map((frame) => frame.id)),
+    [frames],
+  );
+
   return (
-    <div className="flex flex-col">
-      <div className="sticky top-14 z-10 border-b border-border bg-background/95 backdrop-blur-md">
+    <div
+      className={cn(
+        'flex h-[calc(100dvh-8.5rem-env(safe-area-inset-bottom))] flex-col md:h-[calc(100dvh-5.5rem)]',
+        pieces > 0 && 'pb-14 md:pb-20',
+      )}
+    >
+      <div className="z-10 shrink-0 border-b border-border bg-background/95 backdrop-blur-md">
         <FilterBar savedCount={favouriteIds.length} />
       </div>
 
-      <div className="py-3 sm:px-4">
+      <div className="min-h-0 flex-1">
         {failed ? (
-          <div className="mx-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-center sm:mx-0">
+          <div className="m-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-center">
             <AlertTriangle
               className="mx-auto h-6 w-6 text-destructive"
               strokeWidth={1.8}
@@ -137,10 +138,10 @@ export function CatalogPage() {
             <p className="sr-only" role="status">
               {t('common.loading')}
             </p>
-            <FeedSkeleton />
+            <SwiperSkeleton />
           </>
         ) : visible.length === 0 ? (
-          <div className="mx-4 rounded-2xl border border-border bg-card p-8 text-center sm:mx-0">
+          <div className="m-4 rounded-2xl border border-border bg-card p-8 text-center">
             <SearchX
               className="mx-auto h-7 w-7 text-muted-foreground"
               strokeWidth={1.5}
@@ -176,26 +177,16 @@ export function CatalogPage() {
           </div>
         ) : (
           <>
-            {/* `max-w-2xl` rather than the shell's full width: a photograph
-                stretched across a 1280px desktop is not more useful, it is just
-                further from the button underneath it. */}
-            <div className="mx-auto max-w-2xl space-y-6 sm:space-y-8">
-              {visible.map((frame, index) => (
-                <ProductRow
-                  key={frame.id}
-                  frame={frame}
-                  eager={index < EAGER_ROWS}
-                  onBuy={setOpened}
-                />
-              ))}
-            </div>
+            <ProductSwiper
+              frames={visible}
+              newIds={newIds}
+              onBuy={(frame, colour) => setOpened({ frame, colour })}
+              className="h-full"
+            />
 
             {/* `aria-live` so a screen-reader user typing in the search box hears
                 the result count change without leaving the field. */}
-            <p
-              aria-live="polite"
-              className="px-4 pt-6 text-center text-[0.72rem] text-muted-foreground"
-            >
+            <p aria-live="polite" className="sr-only">
               {t('catalog.showing', { shown: visible.length, total: frames.length })}
             </p>
           </>
@@ -237,7 +228,11 @@ export function CatalogPage() {
         </div>
       ) : null}
 
-      <ProductModal frame={openedFrame} onClose={() => setOpened(null)} />
+      <ProductModal
+        frame={openedFrame}
+        initialColour={opened?.colour ?? null}
+        onClose={() => setOpened(null)}
+      />
     </div>
   );
 }
