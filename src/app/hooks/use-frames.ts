@@ -6,7 +6,7 @@
  * three states a page has to render — loading, failed, loaded — rather than a
  * bare array, so none of them can be forgotten.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { env } from '@/lib/env';
 import { listFrames } from '@/lib/firestore/frames';
@@ -16,6 +16,8 @@ export type UseFrames = {
   /** `null` while loading. */
   frames: FrameDoc[] | null;
   failed: boolean;
+  /** Fetch again — after the POS sync has added frames, for one. */
+  reload: () => void;
 };
 
 /**
@@ -32,6 +34,7 @@ const loadSamples = () => import('@/lib/seed/sample-frames');
 export function useFrames(): UseFrames {
   const [frames, setFrames] = useState<FrameDoc[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -56,7 +59,9 @@ export function useFrames(): UseFrames {
     return () => {
       active = false;
     };
-  }, []);
+  }, [version]);
 
-  return { frames, failed };
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
+
+  return { frames, failed, reload };
 }

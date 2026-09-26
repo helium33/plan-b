@@ -1,38 +1,34 @@
 /**
- * Link the catalogue to POS stock — one button, run after uploading frames.
+ * Sync the catalogue with the POS — the same sync that runs by itself when the
+ * owner opens the catalogue (`usePosCatalogueSync`), on demand.
  *
- * A shop cannot order a frame on credit until the frame knows which POS
- * product it is (see `lib/pos/catalog-link.ts` for why that link is stored
- * rather than looked up). Matching is by model number, so this is safe to run
- * as often as you like: it rewrites the same links and reports what it could
- * not match, which is the list to fix — a code typed differently in the two
- * systems, or a model the POS has not been given yet.
+ * POS frames with no catalogue entry get one; entries the sync made earlier
+ * are refreshed; frames uploaded here are only linked to their POS product so
+ * they can be ordered on credit. See `lib/pos/catalog-sync.ts`.
  *
- * Needs a POS `ADMIN` account, because matching reads the POS products and
- * the rules keep those to staff. A catalogue editor without one is told so.
+ * Needs a POS ADMIN account (`npm run set-role -- <email> ADMIN` in the POS
+ * repo): the rules keep POS products, which carry cost, to staff. Anyone else
+ * is told so.
  */
 import { useState } from 'react';
 import { Link2, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/app/components/ui/button';
-import { useRole } from '@/app/hooks/use-role';
-import { linkCatalogueToPos, type LinkReport } from '@/lib/pos/catalog-link';
-import type { FrameDoc } from '@/lib/product';
+import { syncCatalogueFromPos, type SyncReport } from '@/lib/pos/catalog-sync';
 
-export function PosLinkPanel({ frames }: { frames: readonly FrameDoc[] }) {
+export function PosLinkPanel() {
   const { t } = useTranslation();
-  const { role, ready } = useRole();
 
   const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState<LinkReport | null>(null);
+  const [report, setReport] = useState<SyncReport | null>(null);
   const [failed, setFailed] = useState(false);
 
   const run = async () => {
     setBusy(true);
     setFailed(false);
     try {
-      setReport(await linkCatalogueToPos(frames));
+      setReport(await syncCatalogueFromPos());
     } catch {
       setFailed(true);
     } finally {
@@ -51,7 +47,7 @@ export function PosLinkPanel({ frames }: { frames: readonly FrameDoc[] }) {
           type="button"
           variant="outline"
           className="min-h-11"
-          disabled={busy || !ready || role !== 'admin'}
+          disabled={busy}
           onClick={() => void run()}
         >
           {busy ? (
@@ -63,26 +59,21 @@ export function PosLinkPanel({ frames }: { frames: readonly FrameDoc[] }) {
         </Button>
       </div>
 
-      {ready && role !== 'admin' ? (
-        <p className="mt-3 text-[0.78rem] text-muted-foreground">{t('admin.posLink.needsPosAdmin')}</p>
-      ) : null}
-
       {failed ? (
         <p role="alert" className="mt-3 text-[0.8rem] text-destructive">
-          {t('admin.posLink.failed')}
+          {t('admin.posLink.needsPosAdmin')}
         </p>
       ) : null}
 
       {report ? (
         <div role="status" className="mt-3 space-y-1 text-[0.8rem]">
           <p className="font-medium text-foreground">
-            {t('admin.posLink.linked', { count: report.linked.length })}
+            {t('admin.posLink.result', {
+              added: report.added.length,
+              updated: report.updated.length,
+              linked: report.linked.length,
+            })}
           </p>
-          {report.missing.length > 0 ? (
-            <p className="text-muted-foreground" dir="ltr">
-              {t('admin.posLink.missing', { codes: report.missing.join(', ') })}
-            </p>
-          ) : null}
           {report.ambiguous.length > 0 ? (
             <p className="text-destructive" dir="ltr">
               {t('admin.posLink.ambiguous', { codes: report.ambiguous.join(', ') })}

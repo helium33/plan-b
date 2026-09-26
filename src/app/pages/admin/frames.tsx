@@ -94,6 +94,8 @@ export function AdminFramesPage() {
         </p>
       ) : null}
 
+      {frames && frames.length === 0 ? <PosLinkPanel /> : null}
+
       {frames && frames.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
           <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-muted text-muted-foreground">
@@ -106,7 +108,7 @@ export function AdminFramesPage() {
 
       {frames && frames.length > 0 ? (
         <>
-          <PosLinkPanel frames={frames} />
+          <PosLinkPanel />
 
           <p className="mb-4 text-sm text-muted-foreground">
             {t('admin.frameCount', {

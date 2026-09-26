@@ -36,6 +36,7 @@ import { Button } from '@/app/components/ui/button';
 import { ROUTES } from '@/app/config/navigation';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import { useFrames } from '@/app/hooks/use-frames';
+import { usePosCatalogueSync } from '@/app/hooks/use-pos-catalogue-sync';
 import { useCatalogFilters } from '@/app/stores/catalog-filters-store';
 import { useFavouritesStore } from '@/app/stores/favourites-store';
 import { draftPieceCount, useOrderStore } from '@/app/stores/order-store';
@@ -71,7 +72,10 @@ export function CatalogPage() {
   const { t } = useTranslation();
   useDocumentTitle(t('nav.catalog'));
 
-  const { frames, failed } = useFrames();
+  const { frames, failed, reload } = useFrames();
+
+  // The owner's visit pulls new POS frames into the catalogue; see the hook.
+  usePosCatalogueSync(reload);
 
   const filters = useCatalogFilters((s) => s.filters);
   const clear = useCatalogFilters((s) => s.clear);

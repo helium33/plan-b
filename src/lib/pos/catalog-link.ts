@@ -14,7 +14,7 @@
  * document carries the landed cost. Shops must never be able to read that, so
  * the rules keep `products` staff-only — and a shop's order therefore cannot
  * run that query. Instead an admin links the catalogue once
- * (`linkCatalogueToPos`, from the admin frames page) and `posLinks/{frameId}`
+ * (`syncCatalogueFromPos`, which runs when a POS admin opens the catalogue) and `posLinks/{frameId}`
  * holds nothing but the product id. Variants — stock only, no cost — stay
  * readable, which is all an order needs.
  *
@@ -28,9 +28,7 @@ import {
   getDoc,
   getDocs,
   query,
-  serverTimestamp,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase';
@@ -42,58 +40,6 @@ export const POS_LINKS_COLLECTION = 'posLinks';
 /** `AU-505`, `au 505` and `AU505` are the same model to a person. */
 export function normalizeModelNo(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
-/* ── Linking (admin) ───────────────────────────────────────────────────────── */
-
-export type LinkReport = {
-  linked: string[];
-  /** Frame codes with no POS product of that model number. */
-  missing: string[];
-  /** Frame codes matching more than one POS product — linked by hand, not guessed. */
-  ambiguous: string[];
-};
-
-/**
- * Matches every frame to its POS product by model number and records the link.
- *
- * Needs an account the rules let read `products` — a POS `ADMIN`. An ambiguous
- * match is reported rather than resolved: decrementing the wrong product's
- * stock would be worse than a frame that cannot be ordered on credit yet.
- */
-export async function linkCatalogueToPos(frames: readonly FrameDoc[]): Promise<LinkReport> {
-  const snap = await getDocs(query(collection(db, POS.products), where('active', '==', true)));
-
-  const byModel = new Map<string, string[]>();
-  for (const product of snap.docs) {
-    const modelNo = product.get('modelNo');
-    if (typeof modelNo !== 'string' || !modelNo) continue;
-    const key = normalizeModelNo(modelNo);
-    byModel.set(key, [...(byModel.get(key) ?? []), product.id]);
-  }
-
-  const report: LinkReport = { linked: [], missing: [], ambiguous: [] };
-  const batch = writeBatch(db);
-
-  for (const frame of frames) {
-    const matches = byModel.get(normalizeModelNo(frame.frameCode)) ?? [];
-    if (matches.length === 0) {
-      report.missing.push(frame.frameCode);
-    } else if (matches.length > 1) {
-      report.ambiguous.push(frame.frameCode);
-    } else {
-      batch.set(doc(db, POS_LINKS_COLLECTION, frame.id), {
-        productId: matches[0],
-        frameCode: frame.frameCode,
-        linkedAt: serverTimestamp(),
-      });
-      report.linked.push(frame.frameCode);
-    }
-  }
-
-  // One batch holds 500 writes; a wholesale range is a few dozen models.
-  if (report.linked.length > 0) await batch.commit();
-  return report;
 }
 
 /* ── Resolving an order (any buyer) ────────────────────────────────────────── */
