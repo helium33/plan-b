@@ -583,17 +583,6 @@ export const my: TranslationSchema = {
     shop: 'ဆိုင်',
   },
 
-  swiper: {
-    carousel: 'ကိုင်း ကြည့်ရှုရန်',
-    label: 'ကိုင်းများ တစ်ခုချင်း — နောက်တစ်ခုအတွက် အပေါ်သို့ ပွတ်ပါ',
-    slide: 'ကိုင်း',
-    position: '{{total}} ခုအနက် {{current}} — {{name}}',
-    newBadge: 'အသစ်',
-    colours: 'အရောင်များ',
-    previous: 'ယခင်ကိုင်း',
-    next: 'နောက်ကိုင်း',
-    hint: 'နောက်ထပ်ကြည့်ရန် အပေါ်ပွတ်ပါ',
-  },
 
   account: {
     title: 'အကြွေးစာရင်း',

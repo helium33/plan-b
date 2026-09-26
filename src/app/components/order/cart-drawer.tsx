@@ -20,7 +20,7 @@
  * blocked, the drawer says what is missing and points at the voucher.
  *
  * Signed-out buyers never see any of this: there is nothing in the draft,
- * because the catalogue would not let them add anything. See `ProductSwiper`.
+ * because the catalogue would not let them add anything. See `ProductRow`.
  */
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';

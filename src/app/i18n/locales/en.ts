@@ -591,19 +591,6 @@ export const en = {
     shop: 'Shop',
   },
 
-  /* ── The one-frame-per-screen catalogue ─────────────────────────────────── */
-
-  swiper: {
-    carousel: 'frame viewer',
-    label: 'Frames, one at a time — swipe up for the next',
-    slide: 'frame',
-    position: '{{current}} of {{total}}: {{name}}',
-    newBadge: 'New',
-    colours: 'Colours',
-    previous: 'Previous frame',
-    next: 'Next frame',
-    hint: 'Swipe up for more',
-  },
 
   /* ── The shop's credit account (shared with the POS) ────────────────────── */
 

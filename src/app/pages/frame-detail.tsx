@@ -347,7 +347,7 @@ function FrameDetail({ frame }: { frame: FrameDoc }) {
                 The strict rule: no account, no quantities. The colours are still
                 listed above in the gallery strip and the price is still on the
                 page, so this hides the *entry*, not the frame — see the note on
-                the auth gate in `product-swiper.tsx`.
+                the auth gate in `product-row.tsx`.
               */
               <div className="mx-4 mt-2 rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center lg:mx-0">
                 <p className="text-[0.82rem] leading-relaxed text-foreground">
