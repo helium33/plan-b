@@ -87,3 +87,10 @@
     # The try-on and PD tool use a file input with `capture`, not getUserMedia,
     # so no camera permission is needed. Denied explicitly.
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# /sw.js retires the POS's old offline cache on this address (see public/sw.js).
+# It must never be cached itself, or a browser keeps the old worker longer.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
