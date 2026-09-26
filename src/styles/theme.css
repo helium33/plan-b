@@ -11,18 +11,24 @@
 :root {
   --font-size: 16px;
 
-  /* --- Brand ramp: optical blue. Trustworthy, clinical, not corporate-cold. */
-  --brand-50: oklch(0.971 0.014 254.6);
-  --brand-100: oklch(0.938 0.03 254.6);
-  --brand-200: oklch(0.885 0.056 254.6);
-  --brand-300: oklch(0.809 0.096 254.6);
-  --brand-400: oklch(0.707 0.148 254.6);
-  --brand-500: oklch(0.623 0.188 255.5);
-  --brand-600: oklch(0.546 0.203 258.3);
-  --brand-700: oklch(0.488 0.19 259.4);
-  --brand-800: oklch(0.424 0.16 259.6);
-  --brand-900: oklch(0.379 0.128 258.1);
-  --brand-950: oklch(0.263 0.086 259.2);
+  /* --- Brand ramp: Plan B Vision deep teal / slate blue.
+     `--brand-600` is #557C89 exactly — the logo colour, converted to oklch so it
+     sits on the same perceptual ramp as every step around it. The chroma stays
+     low on purpose: this is a slate teal, and a ramp built at a vivid cyan's
+     chroma would leave the one shade that matters looking washed out beside its
+     own neighbours. All eleven steps share hue 220.4, so tints and shades of the
+     logo colour are exactly that rather than a drift toward green or navy. */
+  --brand-50: oklch(0.973 0.007 220.4);
+  --brand-100: oklch(0.941 0.014 220.4);
+  --brand-200: oklch(0.89 0.025 220.4);
+  --brand-300: oklch(0.816 0.037 220.4);
+  --brand-400: oklch(0.712 0.047 220.4);
+  --brand-500: oklch(0.634 0.051 220.4);
+  --brand-600: oklch(0.562 0.048 220.4); /* #557C89 */
+  --brand-700: oklch(0.487 0.042 220.4);
+  --brand-800: oklch(0.413 0.035 220.4);
+  --brand-900: oklch(0.354 0.029 220.4);
+  --brand-950: oklch(0.248 0.021 220.4);
 
   /* --- Loyalty / points accent. Warm gold reads as "reward", not "warning". */
   --gold-300: oklch(0.879 0.128 88.1);
@@ -81,34 +87,34 @@
 }
 
 .dark {
-  /* Blue-black rather than neutral black — keeps the brand hue in the shadows
-     and stops large dark surfaces from looking muddy next to the brand blue. */
-  --background: oklch(0.171 0.012 264.4);
-  --foreground: oklch(0.971 0.003 264.5);
-  --card: oklch(0.208 0.015 264.4);
-  --card-foreground: oklch(0.971 0.003 264.5);
-  --popover: oklch(0.208 0.015 264.4);
-  --popover-foreground: oklch(0.971 0.003 264.5);
+  /* Teal-black rather than neutral black — keeps the brand hue in the shadows
+     and stops large dark surfaces from looking muddy next to the brand teal. */
+  --background: oklch(0.171 0.012 220.4);
+  --foreground: oklch(0.971 0.003 220.4);
+  --card: oklch(0.208 0.015 220.4);
+  --card-foreground: oklch(0.971 0.003 220.4);
+  --popover: oklch(0.208 0.015 220.4);
+  --popover-foreground: oklch(0.971 0.003 220.4);
 
   /* A 600 primary is too dim on a dark ground; step up to 400 for contrast. */
   --primary: var(--brand-400);
-  --primary-foreground: oklch(0.208 0.015 264.4);
-  --secondary: oklch(0.263 0.016 264.4);
-  --secondary-foreground: oklch(0.971 0.003 264.5);
-  --muted: oklch(0.263 0.016 264.4);
-  --muted-foreground: oklch(0.707 0.017 264.4);
-  --accent: oklch(0.279 0.019 262.9);
-  --accent-foreground: oklch(0.971 0.003 264.5);
+  --primary-foreground: oklch(0.208 0.015 220.4);
+  --secondary: oklch(0.263 0.016 220.4);
+  --secondary-foreground: oklch(0.971 0.003 220.4);
+  --muted: oklch(0.263 0.016 220.4);
+  --muted-foreground: oklch(0.707 0.017 220.4);
+  --accent: oklch(0.279 0.019 220.4);
+  --accent-foreground: oklch(0.971 0.003 220.4);
 
   --destructive: oklch(0.637 0.208 25.3);
   --destructive-foreground: oklch(0.971 0.003 264.5);
   --success: oklch(0.696 0.149 162.5);
   --success-foreground: oklch(0.171 0.012 264.4);
 
-  --border: oklch(0.303 0.018 264.4);
-  --input: oklch(0.303 0.018 264.4);
-  --input-background: oklch(0.246 0.016 264.4);
-  --switch-background: oklch(0.372 0.02 264.4);
+  --border: oklch(0.303 0.018 220.4);
+  --input: oklch(0.303 0.018 220.4);
+  --input-background: oklch(0.246 0.016 220.4);
+  --switch-background: oklch(0.372 0.02 220.4);
   --ring: var(--brand-400);
 
   --chart-1: var(--brand-400);
@@ -117,13 +123,13 @@
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.4);
 
-  --sidebar: oklch(0.208 0.015 264.4);
-  --sidebar-foreground: oklch(0.971 0.003 264.5);
+  --sidebar: oklch(0.208 0.015 220.4);
+  --sidebar-foreground: oklch(0.971 0.003 220.4);
   --sidebar-primary: var(--brand-400);
-  --sidebar-primary-foreground: oklch(0.208 0.015 264.4);
-  --sidebar-accent: oklch(0.279 0.019 262.9);
-  --sidebar-accent-foreground: oklch(0.971 0.003 264.5);
-  --sidebar-border: oklch(0.303 0.018 264.4);
+  --sidebar-primary-foreground: oklch(0.208 0.015 220.4);
+  --sidebar-accent: oklch(0.279 0.019 220.4);
+  --sidebar-accent-foreground: oklch(0.971 0.003 220.4);
+  --sidebar-border: oklch(0.303 0.018 220.4);
   --sidebar-ring: var(--brand-400);
 }
 
@@ -272,6 +278,119 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+/**
+ * Walkthrough scene animations.
+ *
+ * Defined here rather than inline so the three SVG scenes in
+ * `components/onboarding/step-scenes.tsx` share one set of keyframes, and so the
+ * reduced-motion rule in @layer base can neutralise them along with everything
+ * else — the scenes apply these through Tailwind's `motion-safe:` variant, and
+ * this is the belt to that braces.
+ */
+@keyframes pbwRow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(0);
+  }
+  30%,
+  70% {
+    opacity: 1;
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes pbwSlideIn {
+  0%,
+  15% {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  35%,
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pbwFly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+    transform: translate(122px, -46px) rotate(-14deg);
+  }
+  85%,
+  100% {
+    opacity: 0;
+    transform: translate(140px, -50px) rotate(-14deg);
+  }
+}
+
+@keyframes pbwPop {
+  0%,
+  60% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  85%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/**
+ * Splash screen.
+ *
+ * `pbwSplashDrop` is the logo's entrance: it falls in, overshoots, and settles —
+ * the bounce the brief asked for, played once rather than looping, because a
+ * mark that keeps bouncing after it has arrived reads as a loading spinner and
+ * this screen is not waiting for anything.
+ *
+ * There is no exit keyframe: the fade-out is a plain opacity transition toggled
+ * by a class, so it survives the reduced-motion rule above (which flattens
+ * animations to 0.01ms and would otherwise skip an exit animation entirely,
+ * leaving the plate on screen until its timer happened to fire).
+ */
+@keyframes pbwSplashDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-38%) scale(0.82);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(6%) scale(1.04);
+  }
+  75% {
+    transform: translateY(-3%) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pbwSplashRise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

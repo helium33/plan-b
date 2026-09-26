@@ -1,98 +1,41 @@
 rules_version = '2';
 
-// Plan B Vision — Firebase Storage security rules.
+// Plan B Wholesale — Firebase Storage security rules.
 //
 // Deploy with:  firebase deploy --only storage
 //
+// ── This bucket is read-only, and that is the whole ruleset ──────────────────
+//
+// Catalogue media moved to Cloudinary (see `src/lib/media/upload.ts`), so
+// nothing in the app writes here any more. Frames uploaded before that move
+// still hold `firebasestorage.googleapis.com` URLs in their `images` arrays, so
+// reads must keep working or an old frame's photos would break — but every write
+// path is closed.
+//
 // Storage rules are a **separate ruleset from Firestore's** and are deployed by a
 // separate command. Deploying `firestore.rules` alone leaves this bucket on its
-// defaults, which is worth knowing because the default in a new project allows
-// any signed-in user to write anywhere — including uploading arbitrary files at
-// the shop's expense.
-//
-// The model here mirrors Firestore: catalogue media is world-readable because it
-// is what customers came to look at, and writable only by staff listed in
-// Firestore's `admins/{uid}` collection.
+// defaults, and the default in a new project allows any signed-in user to write
+// anywhere — which, now that any Google account can sign in, would mean handing
+// free file hosting to the internet. That is precisely why this file still
+// exists rather than being deleted along with the upload path.
 
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // ⚠️ Mirror of BOOTSTRAP_ADMIN_EMAILS in src/config/admins.ts, and of the
-    // identical list in firestore.rules. Three copies, because security rules
-    // cannot import TypeScript. Change one, change all three — and note this file
-    // is a *separate deploy* from firestore.rules.
+    /* ── frames/… — legacy catalogue media ───────────────────────────────── */
     //
-    // `email_verified` is required so an unverified claim to the address grants
-    // nothing. See the note in src/config/admins.ts.
-    function isBootstrapAdmin() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in ['kyawwinhtun564@gmail.com'];
-    }
+    // Public read, no write. Nothing here is sensitive: it is the same imagery
+    // served publicly from Cloudinary today.
 
-    // Cross-service lookup: Storage rules can read Firestore, so staff added as
-    // `admins/{uid}` documents work here too without being listed again.
-    function isAdmin() {
-      return isBootstrapAdmin()
-        || (request.auth != null
-            && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid)));
-    }
-
-    function isImage() {
-      return request.resource.contentType.matches('image/.*');
-    }
-
-    function isVideo() {
-      return request.resource.contentType.matches('video/.*');
-    }
-
-    /* ── frames/{slug}/{cNumber}/… — catalogue media ─────────────────────── */
-    //
-    // Size ceilings are the real backstop. Client-side compression targets a few
-    // hundred kilobytes, but compression runs in a browser the shop controls, and
-    // a rule that trusts it is not a rule. These limits are set well above what
-    // the compressor produces and well below what would cost real money.
-
-    match /frames/{frameSlug}/{cNumber}/{fileName} {
+    match /frames/{allPaths=**} {
       allow read: if true;
-
-      allow write: if isAdmin()
-        && (
-          // Compressed stills land around 150–400 kB; 5 MB leaves generous room
-          // for a browser that fell back to JPEG at a large size.
-          (isImage() && request.resource.size < 5 * 1024 * 1024)
-          ||
-          // Matches MAX_VIDEO_BYTES in lib/media/video.ts, with a little slack.
-          (isVideo() && request.resource.size < 16 * 1024 * 1024)
-        );
-
-      allow delete: if isAdmin();
-    }
-
-    /* ── reviews/{uid}/… — customer review photos ────────────────────────── */
-    //
-    // Path-scoped to the uploader's own uid, which is what stops one customer
-    // writing into another's folder or overwriting their photos. Public read,
-    // because a published review shows them.
-    //
-    // Try-on selfies are deliberately absent: the try-on component keeps the photo
-    // in the browser and never uploads it, so there is no path to secure. See the
-    // note in `components/product/try-on.tsx`.
-
-    match /reviews/{uid}/{fileName} {
-      allow read: if true;
-
-      allow write: if request.auth != null
-        && request.auth.uid == uid
-        && isImage()
-        && request.resource.size < 5 * 1024 * 1024;
-
-      allow delete: if (request.auth != null && request.auth.uid == uid) || isAdmin();
+      allow write: if false;
     }
 
     /* ── Everything else ─────────────────────────────────────────────────── */
     //
-    // Denied. An open bucket is somebody else's free file host.
+    // Denied outright, including the retail build's `reviews/{uid}/…` path. A
+    // write path with no feature behind it is an open bucket waiting to be found.
 
     match /{allPaths=**} {
       allow read, write: if false;

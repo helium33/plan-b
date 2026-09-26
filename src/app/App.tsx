@@ -1,50 +1,67 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
-import {
-  RedirectIfSignedIn,
-  RequireAuth,
-  RequireMember,
-} from '@/app/components/auth/require-auth';
 import { ScrollToTop } from '@/app/components/common/scroll-to-top';
-import { SiteLayout } from '@/app/components/layout/site-layout';
+import { AppShell } from '@/app/components/layout/app-shell';
 import { ROUTES } from '@/app/config/navigation';
 import { AuthProvider } from '@/app/providers/auth-provider';
 import { LanguageProvider } from '@/app/providers/language-provider';
 import { ThemeProvider } from '@/app/providers/theme-provider';
 
-import { AdminLayout } from '@/app/components/admin/admin-layout';
-import { AboutPage } from '@/app/pages/about';
-import { AccountPage } from '@/app/pages/account';
-import { AdminFramesPage } from '@/app/pages/admin/frames';
-import { AdminSeedPage } from '@/app/pages/admin/seed';
-import { AdminUploadPage } from '@/app/pages/admin/upload';
-import { BookingPage } from '@/app/pages/booking';
-import { CartPage } from '@/app/pages/cart';
-import { CheckoutPage } from '@/app/pages/checkout';
-import { ComparePage } from '@/app/pages/compare';
-import { ContactPage } from '@/app/pages/contact';
-import { EyeCarePage } from '@/app/pages/eye-care';
-import { HomePage } from '@/app/pages/home';
-import { LookbookPage } from '@/app/pages/lookbook';
+import { CatalogPage } from '@/app/pages/catalog';
+import { FrameDetailPage } from '@/app/pages/frame-detail';
 import { NotFoundPage } from '@/app/pages/not-found';
-import { OnboardingPage } from '@/app/pages/onboarding';
-import { ProductDetailPage } from '@/app/pages/product-detail';
-import { RecommendationsPage } from '@/app/pages/recommendations';
-import { ShopPage } from '@/app/pages/shop';
-import { SignInPage } from '@/app/pages/sign-in';
-import { SignUpPage } from '@/app/pages/sign-up';
-import { WishlistPage } from '@/app/pages/wishlist';
+import { OrderPage } from '@/app/pages/order';
 
 /**
- * Route table for Plan B Vision.
+ * Pinky Beauty, loaded on demand.
  *
- * Providers wrap the router rather than the other way round: the header's theme,
- * language and account controls sit inside `SiteLayout`, so all three contexts
- * have to be available above it.
+ * A self-contained product with its own palette, fonts and data — none of which
+ * the wholesale catalogue needs. Lazily loading it keeps all of that off the
+ * first paint of the app most visitors actually open.
+ */
+const PinkyApp = lazy(() =>
+  import('@/pinky/pages/pinky-app').then((m) => ({ default: m.PinkyApp })),
+);
+
+/**
+ * The staff screens, loaded on demand.
  *
- * `AuthProvider` is innermost of the three because it is the only one that
- * depends on the others — its error messages are translated — while nothing in
- * theme or language depends on the session.
+ * Everything behind these two imports — Firebase Auth, the upload form, the
+ * image compressor, the video inspector — is code a wholesale buyer can never
+ * reach and should never pay to download. Splitting it here is what keeps the
+ * catalogue's first paint small on a phone.
+ *
+ * The `.then` unwrapping is because these modules use named exports like the
+ * rest of the codebase, and `React.lazy` wants a default.
+ */
+const AdminSection = lazy(() =>
+  import('@/app/pages/admin/section').then((m) => ({ default: m.AdminSection })),
+);
+const SignInPage = lazy(() =>
+  import('@/app/pages/sign-in').then((m) => ({ default: m.SignInPage })),
+);
+
+function RouteFallback() {
+  return (
+    <div className="grid min-h-dvh place-items-center" aria-busy="true">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+    </div>
+  );
+}
+
+/**
+ * Route table for Plan B Wholesale.
+ *
+ * Two buyer-facing routes and a staff section. The staff section sits outside
+ * `AppShell` on purpose: the bottom tab bar is the buyer's ordering loop, and
+ * putting the upload form inside it would suggest the two belong to one journey.
+ *
+ * All three providers wrap the router. `AuthProvider` is app-wide because order
+ * history is tied to an account and lives on the voucher, which is a buyer
+ * screen — but it loads the Firebase Auth SDK inside an effect, so a visitor who
+ * never signs in still does not pay for it on first paint. See the note there.
  */
 export default function App() {
   return (
@@ -52,102 +69,55 @@ export default function App() {
       <LanguageProvider>
         <AuthProvider>
           <BrowserRouter>
-            <ScrollToTop />
+          <ScrollToTop />
 
-            <Routes>
-              <Route element={<SiteLayout />}>
-                <Route path={ROUTES.home} element={<HomePage />} />
+          <Routes>
+            {/* ── Buyer ───────────────────────────────────────────────────── */}
+            <Route element={<AppShell />}>
+              <Route path={ROUTES.catalog} element={<CatalogPage />} />
+              <Route path={ROUTES.frame} element={<FrameDetailPage />} />
+              <Route path={ROUTES.order} element={<OrderPage />} />
+            </Route>
 
-                {/* Catalogue */}
-                <Route path={ROUTES.shop} element={<ShopPage />} />
-                <Route path={ROUTES.product} element={<ProductDetailPage />} />
-                <Route path={ROUTES.lookbook} element={<LookbookPage />} />
-                <Route path={ROUTES.wishlist} element={<WishlistPage />} />
-                <Route path={ROUTES.compare} element={<ComparePage />} />
+            {/* ── Pinky Beauty ────────────────────────────────────────────── */}
+            <Route
+              path={ROUTES.pinky}
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <PinkyApp />
+                </Suspense>
+              }
+            />
 
-                {/* Content */}
-                <Route path={ROUTES.eyeCare} element={<EyeCarePage />} />
-                <Route path={ROUTES.booking} element={<BookingPage />} />
-                <Route path={ROUTES.about} element={<AboutPage />} />
-                <Route path={ROUTES.contact} element={<ContactPage />} />
+            {/* ── Signed-in area ──────────────────────────────────────────── */}
+            <Route
+              path={ROUTES.signIn}
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <SignInPage />
+                </Suspense>
+              }
+            />
+            {/* Splat: `AdminSection` owns the routing below `/admin`. */}
+            <Route
+              path={`${ROUTES.admin}/*`}
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <AdminSection />
+                </Suspense>
+              }
+            />
 
-                {/* Account */}
-                <Route
-                  path={ROUTES.signIn}
-                  element={
-                    <RedirectIfSignedIn>
-                      <SignInPage />
-                    </RedirectIfSignedIn>
-                  }
-                />
-                <Route
-                  path={ROUTES.signUp}
-                  element={
-                    <RedirectIfSignedIn>
-                      <SignUpPage />
-                    </RedirectIfSignedIn>
-                  }
-                />
-                {/* Onboarding writes to the member record, so it needs a phone
-                    number — `RequireMember`, not `RequireAuth`. */}
-                <Route
-                  path={ROUTES.onboarding}
-                  element={
-                    <RequireMember>
-                      <OnboardingPage />
-                    </RequireMember>
-                  }
-                />
-                {/* Reads the saved profile, so it needs a member record too. */}
-                <Route
-                  path={ROUTES.recommendations}
-                  element={
-                    <RequireMember>
-                      <RecommendationsPage />
-                    </RequireMember>
-                  }
-                />
-                {/* `RequireAuth` on purpose: this page hosts the phone-linking
-                    form, so a customer without a phone number must be able to
-                    reach it. `RequireMember` would redirect them here from here. */}
-                <Route
-                  path={ROUTES.account}
-                  element={
-                    <RequireAuth>
-                      <AccountPage />
-                    </RequireAuth>
-                  }
-                />
+            {/* Paths from the retail build, kept as redirects so a bookmarked
+                or shared link lands somewhere useful instead of on a 404. */}
+            {['/shop', '/home', '/products', '/lookbook', '/about', '/contact'].map((path) => (
+              <Route key={path} path={path} element={<Navigate to={ROUTES.catalog} replace />} />
+            ))}
+            <Route path="/cart" element={<Navigate to={ROUTES.order} replace />} />
+            <Route path="/checkout" element={<Navigate to={ROUTES.order} replace />} />
 
-                {/* Purchase — cart stays open to guests; Module 8 decides whether
-                    checkout requires an account. */}
-                <Route path={ROUTES.cart} element={<CartPage />} />
-                <Route path={ROUTES.checkout} element={<CheckoutPage />} />
-
-                {/* Admin. `RequireAuth` establishes a session; `AdminLayout` then
-                    checks `admins/{uid}` once for the whole section, so a new
-                    admin page inherits the gate rather than having to remember it.
-                    Firestore and Storage rules are what actually enforce it. */}
-                <Route
-                  path={ROUTES.admin}
-                  element={
-                    <RequireAuth>
-                      <AdminLayout />
-                    </RequireAuth>
-                  }
-                >
-                  <Route index element={<AdminUploadPage />} />
-                  <Route path="frames" element={<AdminFramesPage />} />
-                  <Route path="seed" element={<AdminSeedPage />} />
-                </Route>
-
-                {/* Legacy paths from the original template. */}
-                <Route path="/services" element={<Navigate to={ROUTES.eyeCare} replace />} />
-                <Route path="/products" element={<Navigate to={ROUTES.shop} replace />} />
-
-                <Route path="*" element={<NotFoundPage />} />
-              </Route>
-            </Routes>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
           </BrowserRouter>
         </AuthProvider>
       </LanguageProvider>

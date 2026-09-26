@@ -10,12 +10,26 @@
 #
 #   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
 #   VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID,
-#   VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID,
-#   VITE_TELEGRAM_HANDLE, VITE_STORE_PHONE, VITE_STORE_EMAIL
+#   VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID
 #
 # These are public client identifiers, not secrets — the protection is the
 # Firestore/Storage rules. But they must be present or the app throws on start,
 # by design (see src/lib/env.ts).
+#
+# ── Do NOT set this one ──────────────────────────────────────────────────────
+#
+# VITE_USE_SAMPLE_CATALOGUE must be left unset (or `false`) here. Set to `true`,
+# the catalogue page never reads Firestore at all — every visitor sees the
+# built-in demo frames regardless of what staff have actually uploaded, with no
+# error to say so. This is the exact bug that leaves real uploads invisible on
+# the live site; if frames are not appearing after an upload, this is the first
+# thing to check, both here and in `.env.local` for local testing.
+#
+# ── Optional, all have safe defaults if omitted ─────────────────────────────
+#
+#   VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET  — catalogue media
+#   VITE_TELEGRAM_HANDLE, VITE_VIBER_NUMBER                    — order dispatch
+#   VITE_ONBOARDING_VIDEO_URL, VITE_ONBOARDING_POSTER_URL      — launch walkthrough
 
 [build]
   command = "npm run build"

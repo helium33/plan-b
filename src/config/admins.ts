@@ -1,39 +1,39 @@
 /**
- * Bootstrap admin accounts.
+ * Who may edit the catalogue.
  *
- * ── The problem this solves ────────────────────────────────────────────────
- * Staff access is granted by an `admins/{uid}` document, and those documents can
- * only be created by an admin. On a fresh project nobody is an admin, so nobody
- * can create the first one — the classic chicken-and-egg. The previous answer was
- * "create it by hand in the Firebase console", which works but is a manual step
- * that has to be explained, repeated on every new environment, and is easy to get
- * wrong (paste the wrong uid and nothing happens, with no error to explain why).
+ * ── Two tiers, and why they are not the same thing ─────────────────────────
+ * *Signing in* is open: any Google account can authenticate and gets a
+ * `users/{uid}` document. That costs nothing and lets the shop see who is
+ * ordering.
  *
- * Instead, the owner's email address is trusted directly. Anyone signing in with
- * a **verified** address on this list is an admin, whether or not the Firestore
- * document exists.
+ * *Editing the catalogue* is closed to the addresses below. Uploading a frame
+ * changes what every buyer sees and what they are quoted, so it is not something
+ * to hand out by accident.
  *
  * ── Why `email_verified` is not optional ───────────────────────────────────
- * Without it, someone could register an email/password account claiming this
- * address and inherit the shop's catalogue. Firebase only sets
- * `email_verified: true` after the address is actually proven — automatically for
- * Google sign-in, and after clicking the emailed link for email/password. Both
- * rulesets check the flag, so an unverified claim grants nothing.
+ * Without it, someone could register an email/password account claiming one of
+ * these addresses and inherit the shop's catalogue. Firebase only sets
+ * `email_verified: true` after the address is actually proven — automatically
+ * for Google sign-in, and after clicking the emailed link for email/password.
+ * Both rulesets check the flag, so an unverified claim grants nothing.
  *
  * ── Keeping three copies in step ───────────────────────────────────────────
  * This list is duplicated in `firestore.rules` and `storage.rules`, because
  * security rules cannot import TypeScript. **Changing it here means changing it
- * in both of those files too**, and each is a separate deploy. The duplication is
- * unavoidable; the comment in each file points back here.
+ * in both of those files too**, and each is a separate deploy. The duplication
+ * is unavoidable; the comment in each file points back here.
  *
- * Prefer adding further staff as `admins/{uid}` documents from the admin page —
- * that needs no deploy at all. This list is for the first account only.
+ * Further staff can be added as `admins/{uid}` documents from the admin page —
+ * that needs no deploy at all.
  */
 
-export const BOOTSTRAP_ADMIN_EMAILS: readonly string[] = ['kyawwinhtun564@gmail.com'];
+export const BOOTSTRAP_ADMIN_EMAILS: readonly string[] = [
+  'kyawwinhtun56@gmail.com',
+  'kyawwinhtun564@gmail.com',
+];
 
 /**
- * Whether an email grants bootstrap admin access.
+ * Whether an email grants catalogue access.
  *
  * Compared case-insensitively: email addresses are case-insensitive in the part
  * that matters here, and a provider returning `Kyaw...@gmail.com` should not

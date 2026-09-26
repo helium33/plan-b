@@ -3,35 +3,40 @@ import type { TranslationSchema } from '@/app/i18n/locales/en';
 /**
  * Every path in the app, in one place. Route definitions, links and redirects
  * all read from here so a rename cannot leave a dead `<Link>` behind.
+ *
+ * There are two buyer-facing paths and that is the whole app: the catalogue and
+ * the voucher. Everything under `/admin` is staff tooling for filling the
+ * catalogue, and `/sign-in` exists only to reach it.
  */
 export const ROUTES = {
-  home: '/',
-  shop: '/shop',
-  product: '/product/:id',
-  lookbook: '/lookbook',
-  eyeCare: '/eye-care',
-  booking: '/booking',
-  about: '/about',
-  contact: '/contact',
+  /** Catalogue — ငါတို့ကိုင်း. The landing page: frames, immediately. */
+  catalog: '/',
+  /** One frame, with its photos and the C-colour order panel. */
+  frame: '/frame/:id',
+  /** The draft order priced as a voucher — ဘောက်ချာ. */
+  order: '/order',
+
+  /**
+   * Pinky Beauty — the retail storefront, checkout and B2B Credit/AR dashboard.
+   *
+   * A separate identity with its own pink theme and its own shell, so it is
+   * mounted outside `AppShell` rather than added as a third wholesale tab.
+   */
+  pinky: '/pinky',
+
   signIn: '/sign-in',
-  signUp: '/sign-up',
-  onboarding: '/onboarding',
-  /** Results of the personalisation form. Needs a completed profile. */
-  recommendations: '/recommendations',
-  account: '/account',
-  wishlist: '/wishlist',
-  compare: '/compare',
-  cart: '/cart',
-  checkout: '/checkout',
+
   /** Admin area. Index tab is the upload form; children are nested under it. */
   admin: '/admin',
   adminFrames: '/admin/frames',
   adminSeed: '/admin/seed',
+  /** The wholesale credit ledger — per-shop running balance, 14-day cycles. */
+  adminCredit: '/admin/credit',
 } as const;
 
-/** Builds a concrete product URL from the parameterised route. */
-export function productPath(id: string): string {
-  return ROUTES.product.replace(':id', encodeURIComponent(id));
+/** Builds a concrete frame URL from the parameterised route. */
+export function framePath(id: string): string {
+  return ROUTES.frame.replace(':id', encodeURIComponent(id));
 }
 
 /**
@@ -45,59 +50,14 @@ export interface NavLink {
   labelKey: NavLabelKey;
 }
 
-/** Header links, in display order. */
-export const PRIMARY_NAV: readonly NavLink[] = [
-  { to: ROUTES.home, labelKey: 'nav.home' },
-  { to: ROUTES.shop, labelKey: 'nav.shop' },
-  { to: ROUTES.lookbook, labelKey: 'nav.lookbook' },
-  { to: ROUTES.eyeCare, labelKey: 'nav.eyeCare' },
-  { to: ROUTES.booking, labelKey: 'nav.booking' },
-  { to: ROUTES.about, labelKey: 'nav.about' },
-  { to: ROUTES.contact, labelKey: 'nav.contact' },
-] as const;
-
-type FooterLabelKey =
-  | `footer.${keyof TranslationSchema['footer']}`
-  | `nav.${keyof TranslationSchema['nav']}`
-  | `pages.${'wishlist' | 'compare' | 'account'}.title`;
-
-export interface FooterColumn {
-  titleKey: `footer.${keyof TranslationSchema['footer']}`;
-  links: readonly { to: string; labelKey: FooterLabelKey }[];
-}
-
 /**
- * Footer columns. Some targets (FAQ, warranty, privacy…) are content pages that
- * do not exist yet; they point at their eventual paths and currently resolve to
- * the not-found page, which is preferable to `href="#"` shipping to production.
+ * The bottom bar's two tabs, in display order.
+ *
+ * Two, deliberately. A wholesale order is one loop — look at frames, enter
+ * quantities, check the voucher, send — and a bar with room for five icons
+ * invites the fourth and fifth to be invented.
  */
-export const FOOTER_COLUMNS: readonly FooterColumn[] = [
-  {
-    titleKey: 'footer.shop',
-    links: [
-      { to: ROUTES.shop, labelKey: 'nav.shop' },
-      { to: ROUTES.lookbook, labelKey: 'nav.lookbook' },
-      { to: ROUTES.wishlist, labelKey: 'pages.wishlist.title' },
-      { to: ROUTES.compare, labelKey: 'pages.compare.title' },
-    ],
-  },
-  {
-    titleKey: 'footer.company',
-    links: [
-      { to: ROUTES.about, labelKey: 'nav.about' },
-      { to: ROUTES.contact, labelKey: 'nav.contact' },
-      { to: ROUTES.booking, labelKey: 'nav.booking' },
-      { to: ROUTES.eyeCare, labelKey: 'nav.eyeCare' },
-    ],
-  },
-  {
-    titleKey: 'footer.customerService',
-    links: [
-      { to: '/faq', labelKey: 'footer.faq' },
-      { to: '/shipping-returns', labelKey: 'footer.shippingReturns' },
-      { to: '/warranty', labelKey: 'footer.warranty' },
-      { to: '/size-guide', labelKey: 'footer.sizeGuide' },
-      { to: '/prescription-guide', labelKey: 'footer.prescriptionGuide' },
-    ],
-  },
+export const PRIMARY_NAV: readonly NavLink[] = [
+  { to: ROUTES.catalog, labelKey: 'nav.catalog' },
+  { to: ROUTES.order, labelKey: 'nav.order' },
 ] as const;

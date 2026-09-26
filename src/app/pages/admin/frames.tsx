@@ -10,7 +10,6 @@
  * otherwise unpublishing something would make it unrecoverable through the UI.
  */
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   Eye,
@@ -23,7 +22,6 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
-import { productPath } from '@/app/config/navigation';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import { subscribeToFrames } from '@/lib/firestore/frames';
 import { deleteFrame, setFramePublished } from '@/lib/firestore/frame-writes';
@@ -151,7 +149,12 @@ export function AdminFramesPage() {
 
                     <p className="mt-0.5 text-xs text-muted-foreground" dir="ltr">
                       {frame.brand} · {frame.frameCode} ·{' '}
-                      {formatKyat(frame.price, t('common.currency'))}
+                      {formatKyat(frame.wholesalePrice, t('common.currency'))}
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t(`attributes.category.${frame.category}`)} ·{' '}
+                      {t(`attributes.material.${frame.material}`)}
                     </p>
 
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -164,10 +167,6 @@ export function AdminFramesPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link to={productPath(frame.id)}>{t('admin.view')}</Link>
-                    </Button>
-
                     <Button
                       type="button"
                       variant="outline"

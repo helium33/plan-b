@@ -1,37 +1,33 @@
 /**
- * Uploads to Firebase Storage.
+ * Uploads catalogue media to Cloudinary.
  *
- * Paths are deterministic and human-readable:
+ * ── Why Cloudinary and not Firebase Storage ────────────────────────────────
+ * Delivery. A frame photo is served to every buyer browsing the catalogue on a
+ * phone, and Cloudinary resizes and re-encodes on the fly at the CDN edge, so a
+ * 2 MB upload reaches a phone as a 40 kB WebP without the shop doing anything.
+ * Firebase Storage serves back exactly what was uploaded, which on a Myanmar
+ * mobile connection is the difference between a catalogue that loads and one
+ * that does not. Everything else — Firestore, Auth, rules — stays on Firebase.
  *
- *   frames/{frameSlug}/{cNumber}/image-1.webp
- *   frames/{frameSlug}/{cNumber}/video-1.mp4
- *   frames/{frameSlug}/{cNumber}/poster-1.webp
+ * ── The preset shapes this code ────────────────────────────────────────────
+ * The unsigned preset (`ml_eyeware`) is configured *Disallow public_id*, *Use
+ * filename*, *Unique filename*, *Overwrite: false*. So this sends a `folder`
+ * plus a **named blob** and never a `public_id` — passing one is rejected
+ * outright. Cloudinary derives the id from the filename and appends a suffix to
+ * keep it unique.
  *
- * Deterministic rather than random ids, for two reasons. Re-uploading a frame's
- * second photo overwrites the old one instead of orphaning it, so the bucket does
- * not silently fill with files nothing references. And when something looks wrong
- * on the shop page, the file is findable in the Firebase console from the frame
- * code alone.
- *
- * All uploads are resumable. A shop on mobile data will lose the connection
- * partway through a 15 MB video, and `uploadBytesResumable` recovers from that
- * where a single-shot `uploadBytes` would start again from zero.
+ * ── Diagnosing a failure ───────────────────────────────────────────────────
+ * A wrong *cloud name* returns `401 Unknown API key`, which reads like a
+ * credentials problem and sends you hunting through the preset. A real cloud
+ * with a bad *preset* returns `400 Upload preset not found`. That pair is the
+ * fastest way to tell the two apart — the message does not mean what it says.
  */
-import {
-  type UploadTask,
-  deleteObject,
-  getDownloadURL,
-  listAll,
-  ref,
-  uploadBytesResumable,
-} from 'firebase/storage';
-
-import { storage } from '@/lib/firebase';
+import { env } from '@/lib/env';
 
 export type UploadHandle = {
-  /** Resolves to the public download URL. */
+  /** Resolves to the public delivery URL. */
   done: Promise<string>;
-  /** Aborts the transfer. The partial object is discarded by Storage. */
+  /** Aborts the transfer. */
   cancel: () => void;
 };
 
@@ -42,7 +38,7 @@ export type UploadProgress = {
   fraction: number;
 };
 
-/** Where a variant's media lives. Exported so the delete path can reuse it. */
+/** Where a variant's media lives, as a Cloudinary folder. */
 export function variantFolder(frameSlug: string, cNumber: string): string {
   // C-numbers are shop-entered, so they are sanitised before becoming a path
   // segment — a stray `/` would silently create a nested folder.
@@ -50,11 +46,21 @@ export function variantFolder(frameSlug: string, cNumber: string): string {
   return `frames/${frameSlug}/${safeC}`;
 }
 
+/** `image` for stills, `video` for clips. Cloudinary has separate endpoints. */
+function resourceKind(blob: Blob): 'image' | 'video' {
+  return blob.type.startsWith('video/') ? 'video' : 'image';
+}
+
 /**
- * Starts a resumable upload.
+ * Starts an upload.
  *
- * @param path     Full object path, from `variantFolder`.
- * @param blob     The compressed blob.
+ * `XMLHttpRequest` rather than `fetch` purely for `upload.onprogress`: the
+ * Fetch API still has no way to observe request-body progress, and a shop
+ * uploading a 15 MB video over mobile data needs to see that something is
+ * happening. The progress bar is the difference between waiting and force-quitting.
+ *
+ * @param path       Full object path from `variantFolder`, plus a filename.
+ * @param blob       The compressed blob.
  * @param onProgress Called on every progress event.
  */
 export function uploadMedia(
@@ -62,35 +68,61 @@ export function uploadMedia(
   blob: Blob,
   onProgress?: (progress: UploadProgress) => void,
 ): UploadHandle {
-  const objectRef = ref(storage, path);
+  const request = new XMLHttpRequest();
 
-  const task: UploadTask = uploadBytesResumable(objectRef, blob, {
-    contentType: blob.type || 'application/octet-stream',
-    // A year, immutable: the path is deterministic and the content at a given
-    // path only changes when the shop deliberately re-uploads, at which point the
-    // download URL's token changes too and busts the cache anyway.
-    cacheControl: 'public, max-age=31536000, immutable',
-  });
+  const lastSlash = path.lastIndexOf('/');
+  const folder = lastSlash > 0 ? path.slice(0, lastSlash) : '';
+  const filename = path.slice(lastSlash + 1) || 'upload';
 
   const done = new Promise<string>((resolve, reject) => {
-    task.on(
-      'state_changed',
-      (snapshot) => {
-        onProgress?.({
-          bytesTransferred: snapshot.bytesTransferred,
-          totalBytes: snapshot.totalBytes,
-          // Guard the divide: `totalBytes` is 0 for a moment before the first chunk.
-          fraction: snapshot.totalBytes > 0 ? snapshot.bytesTransferred / snapshot.totalBytes : 0,
-        });
-      },
-      (error) => reject(error),
-      () => {
-        getDownloadURL(task.snapshot.ref).then(resolve).catch(reject);
-      },
+    const form = new FormData();
+    form.append('upload_preset', env.cloudinary.uploadPreset);
+    if (folder) form.append('folder', folder);
+    // The filename on the blob is what Cloudinary derives the public id from,
+    // since the preset forbids sending one directly.
+    form.append('file', blob, filename);
+
+    request.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.({
+        bytesTransferred: event.loaded,
+        totalBytes: event.total,
+        fraction: event.total > 0 ? event.loaded / event.total : 0,
+      });
+    });
+
+    request.addEventListener('load', () => {
+      let payload: { secure_url?: string; error?: { message?: string } } = {};
+      try {
+        payload = JSON.parse(request.responseText);
+      } catch {
+        reject(new Error(`Cloudinary returned a non-JSON response (${request.status})`));
+        return;
+      }
+
+      if (request.status >= 200 && request.status < 300 && payload.secure_url) {
+        resolve(payload.secure_url);
+        return;
+      }
+
+      reject(
+        new Error(
+          payload.error?.message ?? `Cloudinary upload failed with status ${request.status}`,
+        ),
+      );
+    });
+
+    request.addEventListener('error', () => reject(new Error('Network error during upload')));
+    request.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+    request.open(
+      'POST',
+      `https://api.cloudinary.com/v1_1/${env.cloudinary.cloudName}/${resourceKind(blob)}/upload`,
     );
+    request.send(form);
   });
 
-  return { done, cancel: () => task.cancel() };
+  return { done, cancel: () => request.abort() };
 }
 
 /**
@@ -119,45 +151,22 @@ export async function uploadAll(
 }
 
 /**
- * Deletes every object under a frame's folder.
+ * Deleting a frame's media is **not** possible from the browser.
  *
- * Storage has no recursive delete, so this lists and removes each object. Called
- * when a frame is deleted from the admin list — without it, deleting a frame
- * leaves its photos paid for indefinitely.
+ * Cloudinary's destroy API requires the API secret to sign the request, and an
+ * API secret in a client bundle is an API secret published to the world — anyone
+ * could then delete the shop's entire media library. So this reports that
+ * nothing was removed rather than pretending otherwise, and the frame document
+ * is deleted regardless.
  *
- * Failures are collected rather than thrown: a missing object (already deleted,
- * or never uploaded) must not stop the rest, and the Firestore document should
- * still go even if a stray file cannot.
+ * The consequence is real and worth stating: deleting a frame orphans its
+ * images in Cloudinary. They stop being referenced but keep occupying storage.
+ * Clearing them needs either the Cloudinary console (Media Library → delete the
+ * `frames/{slug}` folder) or a server-side function holding the secret, which is
+ * the right fix if the shop starts deleting frames often.
  */
-export async function deleteFrameMedia(frameSlug: string): Promise<{ deleted: number; failed: number }> {
-  const folderRef = ref(storage, `frames/${frameSlug}`);
-
-  let deleted = 0;
-  let failed = 0;
-
-  const removeAll = async (target: typeof folderRef): Promise<void> => {
-    const listing = await listAll(target);
-
-    await Promise.all(
-      listing.items.map(async (item) => {
-        try {
-          await deleteObject(item);
-          deleted += 1;
-        } catch {
-          failed += 1;
-        }
-      }),
-    );
-
-    // Variant subfolders (`.../C1`, `.../C2`).
-    await Promise.all(listing.prefixes.map(removeAll));
-  };
-
-  try {
-    await removeAll(folderRef);
-  } catch {
-    // `listAll` on a prefix that never existed throws; nothing to clean up.
-  }
-
-  return { deleted, failed };
+export async function deleteFrameMedia(
+  _frameSlug: string,
+): Promise<{ deleted: number; failed: number; requiresManualCleanup: boolean }> {
+  return { deleted: 0, failed: 0, requiresManualCleanup: true };
 }

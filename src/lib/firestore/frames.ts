@@ -1,18 +1,18 @@
 /**
- * Firestore reads for the frame catalogue.
+ * Firestore reads for the wholesale frame catalogue.
  *
- * ── Why recommendations are ranked in the browser ──────────────────────────
- * `recommendFrames` sorts by a *computed* weighted score, and Firestore can
- * only order by stored fields. So the ranking cannot be a query, no matter how
- * the data is indexed — the choice is between fetching candidates and scoring
- * them here, or denormalising a score per customer into the database, which
- * would have to be recomputed for every customer whenever stock changes.
+ * The whole catalogue is fetched in one read and filtered in the browser. That
+ * is the design, not a shortcut: a wholesale buyer flips between the category and
+ * material chips constantly while deciding, and a round trip per chip would make
+ * the app feel like a website instead of a catalogue. One read of a few hundred
+ * documents holds comfortably for a single distributor's range.
  *
- * Fetching and scoring in memory is therefore the design, not a shortcut. It
- * holds comfortably for a single optical shop's catalogue (hundreds of frames,
- * a few hundred kilobytes). Past a few thousand, the fix is to pre-filter on
- * face shape server-side and score the remainder — see `queryFramesByFaceShape`,
- * which is written and ready but needs a composite index before it is used.
+ * ── Normalisation is doing real work here ──────────────────────────────────
+ * `normalizeFrame` is the only place that knows the retail schema this catalogue
+ * grew out of. Documents written before the wholesale pivot carry `price`,
+ * `categories: ['Men', …]` and materials like `Acetate`; they are mapped forward
+ * on every read so an existing catalogue keeps working without a migration job
+ * anyone has to remember to run.
  */
 import {
   type Unsubscribe,
@@ -24,50 +24,34 @@ import {
   onSnapshot,
   orderBy,
   query,
-  where,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase';
 import {
-  CATEGORIES,
-  COMFORT_FEATURES,
-  FACE_SHAPES,
-  FRAME_SIZES,
-  GENDERS,
-  MATERIALS,
-  type Category,
-  type ComfortFeature,
-  type FaceShape,
-  type FrameSize,
-  type Gender,
-  type Material,
+  FRAME_CATEGORIES,
+  categoryFromLegacyTags,
+  materialFromLegacy,
+  shapeFromStored,
+  stockStatusFromStored,
+  type FrameCategory,
 } from '@/lib/attributes';
-import { FRAMES_COLLECTION, type FrameDoc, type FrameVariant } from '@/lib/product';
+import {
+  FRAMES_COLLECTION,
+  type FrameDimensions,
+  type FrameDoc,
+  type FrameVariant,
+} from '@/lib/product';
 
 /**
  * Ceiling on a catalogue read.
  *
- * Not a page size — the recommender needs the whole catalogue to rank it. This
- * exists so a runaway import cannot turn one page load into a ten-thousand
- * document download.
+ * Not a page size — the filters need the whole range to filter it. This exists
+ * so a runaway import cannot turn one page load into a ten-thousand document
+ * download.
  */
 const MAX_CATALOGUE_READ = 500;
 
 /* ── Normalisation ─────────────────────────────────────────────────────────── */
-
-/**
- * Keeps only values in the allowed vocabulary.
- *
- * Admin uploads are the only writer, but a typo in a manual console edit or a
- * value removed from `attributes.ts` after data was written would otherwise
- * flow straight into filter logic and quietly match nothing. Dropping unknowns
- * at the boundary means the rest of the app can trust the union types.
- */
-function keepKnown<T extends string>(value: unknown, allowed: readonly T[]): T[] {
-  if (!Array.isArray(value)) return [];
-  const set = new Set<string>(allowed);
-  return value.filter((entry): entry is T => typeof entry === 'string' && set.has(entry));
-}
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -82,8 +66,8 @@ function normalizeVariant(value: unknown): FrameVariant | null {
   const raw = value as Record<string, unknown>;
 
   const cNumber = asString(raw.cNumber).trim();
-  // A variant without a C-number cannot be ordered over Telegram, which makes
-  // it unsellable — so it is dropped rather than displayed.
+  // A variant without a C-number cannot be ordered, which makes it unsellable —
+  // so it is dropped rather than displayed.
   if (!cNumber) return null;
 
   const images = Array.isArray(raw.images)
@@ -100,8 +84,58 @@ function normalizeVariant(value: unknown): FrameVariant | null {
     images,
     videos,
     // Absent means available: stock flags arrived later than the first uploads,
-    // and defaulting to hidden would silently empty the shop.
+    // and defaulting to hidden would silently empty the catalogue.
     inStock: raw.inStock !== false,
+  };
+}
+
+/**
+ * Reads the frame's shelf.
+ *
+ * Prefers the wholesale `category` field, falling back to the retail
+ * `categories` tag array. Written this way round so that once a frame is
+ * re-saved through the admin form its stored value wins outright and the legacy
+ * path stops being consulted for it.
+ */
+function readCategory(data: Record<string, unknown>): FrameCategory {
+  const stored = data.category;
+  if (typeof stored === 'string' && (FRAME_CATEGORIES as readonly string[]).includes(stored)) {
+    return stored as FrameCategory;
+  }
+
+  const legacy = Array.isArray(data.categories)
+    ? data.categories.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+
+  return categoryFromLegacyTags(legacy);
+}
+
+/**
+ * Reads the millimetre measurements.
+ *
+ * Accepts the nested object the upload form writes, and also a flat
+ * `"52-18-142"` string — some early frames carried the measurements in the
+ * description and were migrated by hand into that shape, which is the form a
+ * person naturally types.
+ */
+function readDimensions(value: unknown): FrameDimensions {
+  if (typeof value === 'string') {
+    const parts = value.split(/[^0-9]+/).filter(Boolean).map(Number);
+    if (parts.length === 3) {
+      return { lensWidth: parts[0], bridge: parts[1], templeLength: parts[2] };
+    }
+    return { lensWidth: 0, bridge: 0, templeLength: 0 };
+  }
+
+  if (typeof value !== 'object' || value === null) {
+    return { lensWidth: 0, bridge: 0, templeLength: 0 };
+  }
+
+  const raw = value as Record<string, unknown>;
+  return {
+    lensWidth: asNumber(raw.lensWidth),
+    bridge: asNumber(raw.bridge),
+    templeLength: asNumber(raw.templeLength),
   };
 }
 
@@ -110,47 +144,37 @@ function normalizeFrame(id: string, data: Record<string, unknown>): FrameDoc {
     ? data.variants.map(normalizeVariant).filter((v): v is FrameVariant => v !== null)
     : [];
 
-  const frameSize = FRAME_SIZES.includes(data.frameSize as FrameSize)
-    ? (data.frameSize as FrameSize)
-    : 'Medium';
-
-  const material = MATERIALS.includes(data.material as Material)
-    ? (data.material as Material)
-    : 'Plastic';
-
-  const categories = keepKnown<Category>(data.categories, CATEGORIES);
-
   return {
     id,
     brand: asString(data.brand),
     frameCode: asString(data.frameCode),
     name: asString(data.name),
-    price: asNumber(data.price),
-    compareAtPrice:
-      typeof data.compareAtPrice === 'number' && Number.isFinite(data.compareAtPrice)
-        ? data.compareAtPrice
-        : null,
 
-    faceShapes: keepKnown<FaceShape>(data.faceShapes, FACE_SHAPES),
-    categories,
-    frameSize,
-    material,
-    comfortFeatures: keepKnown<ComfortFeature>(data.comfortFeatures, COMFORT_FEATURES),
+    // `price` is the retail field name. Reading it as a fallback means a
+    // pre-pivot catalogue prices at its old figure rather than at zero — visibly
+    // wrong beats invisibly free.
+    wholesalePrice: asNumber(data.wholesalePrice) || asNumber(data.price),
 
-    // Derived from categories when absent, so the two cannot disagree.
-    suitedFor: (() => {
-      const stored = keepKnown<Gender>(data.suitedFor, GENDERS);
-      if (stored.length > 0) return stored;
+    category: readCategory(data),
+    material: materialFromLegacy(data.material),
+    shape: shapeFromStored(data.shape),
+    stockStatus: stockStatusFromStored(data.stockStatus),
 
-      const derived: Gender[] = [];
-      if (categories.includes('Men')) derived.push('Male');
-      if (categories.includes('Women')) derived.push('Female');
-      // A frame tagged for neither (unisex, or kids') suits anyone.
-      return derived.length > 0 ? derived : [...GENDERS];
-    })(),
+    dimensions: readDimensions(data.dimensions),
+    // Zero means unweighed, not weightless — a frame that genuinely weighs
+    // nothing does not exist, so the falsy case is the missing case.
+    weightGrams: asNumber(data.weightGrams) || null,
 
     variants,
     description: asString(data.description),
+
+    // Both default to false for documents written before these fields existed.
+    // Absent has to mean "no" for each: claiming a case the shop never packs, or
+    // filling the Best Sellers shelf with the whole catalogue, are the two ways
+    // defaulting to true would go wrong.
+    includesCase: data.includesCase === true,
+    bestSeller: data.bestSeller === true,
+
     createdAtMs: asNumber(data.createdAtMs),
     published: data.published !== false,
   };
@@ -163,8 +187,8 @@ function normalizeFrame(id: string, data: Record<string, unknown>): FrameDoc {
  *
  * `published` is filtered in memory rather than in the query on purpose:
  * combining an equality filter with `orderBy` on a different field requires a
- * composite index, and this read exists to feed a client-side recommender that
- * needs the documents anyway. Avoiding the index keeps setup to zero steps.
+ * composite index, and this read fetches the documents anyway. Avoiding the
+ * index keeps first-run setup to zero steps.
  */
 export async function listFrames(max = MAX_CATALOGUE_READ): Promise<FrameDoc[]> {
   const snap = await getDocs(
@@ -181,41 +205,18 @@ export async function getFrame(id: string): Promise<FrameDoc | null> {
   return snap.exists() ? normalizeFrame(snap.id, snap.data()) : null;
 }
 
-/** Live catalogue subscription, for the admin grid in Module 5. */
+/** Live catalogue subscription, for the admin grid. Includes unpublished frames. */
 export function subscribeToFrames(
   onChange: (frames: FrameDoc[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(collection(db, FRAMES_COLLECTION), orderBy('createdAtMs', 'desc'), fbLimit(MAX_CATALOGUE_READ)),
+    query(
+      collection(db, FRAMES_COLLECTION),
+      orderBy('createdAtMs', 'desc'),
+      fbLimit(MAX_CATALOGUE_READ),
+    ),
     (snap) => onChange(snap.docs.map((d) => normalizeFrame(d.id, d.data()))),
     (error) => onError?.(error),
   );
-}
-
-/**
- * Server-side pre-filter by face shape.
- *
- * Unused today — `listFrames` plus in-memory scoring is cheaper at this
- * catalogue size, and this needs a composite index on
- * (`faceShapes` array-contains, `createdAtMs` desc) that Firestore will prompt
- * for on first run. Kept because it is the documented escape hatch when the
- * catalogue outgrows a full read, and writing it later under load is worse.
- */
-export async function queryFramesByFaceShape(
-  faceShape: FaceShape,
-  max = 60,
-): Promise<FrameDoc[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, FRAMES_COLLECTION),
-      where('faceShapes', 'array-contains', faceShape),
-      orderBy('createdAtMs', 'desc'),
-      fbLimit(max),
-    ),
-  );
-
-  return snap.docs
-    .map((d) => normalizeFrame(d.id, d.data()))
-    .filter((frame) => frame.published);
 }

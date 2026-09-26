@@ -1,5 +1,4 @@
 import { Check, Languages } from 'lucide-react';
-import { motion } from 'motion/react';
 
 import {
   DropdownMenu,
@@ -27,7 +26,7 @@ export function LanguageToggle({ className }: { className?: string }) {
           aria-label={t('language.toggle')}
           title={`${t('language.label')}: ${LANGUAGE_META[language].label}`}
           className={cn(
-            'flex h-9 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground',
+            'flex h-11 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground',
             'transition-colors hover:bg-accent hover:text-foreground',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             className,
@@ -55,50 +54,5 @@ export function LanguageToggle({ className }: { className?: string }) {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/**
- * Segmented EN / MM switch for the mobile menu, where a dropdown inside a
- * slide-over panel is one nested layer too many.
- */
-export function LanguageSegmented({ className }: { className?: string }) {
-  const { t, language, setLanguage } = useLanguage();
-
-  return (
-    <div
-      role="radiogroup"
-      aria-label={t('language.label')}
-      className={cn('inline-flex rounded-full border border-border bg-muted/60 p-1', className)}
-    >
-      {SUPPORTED_LANGUAGES.map((code) => {
-        const active = code === language;
-
-        return (
-          <button
-            key={code}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => setLanguage(code)}
-            className={cn(
-              'relative rounded-full px-4 py-1.5 text-sm transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-              code === 'my' && 'font-myanmar',
-            )}
-          >
-            {active && (
-              <motion.span
-                layoutId="language-pill"
-                className="absolute inset-0 rounded-full bg-background shadow-sm"
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
-            <span className="relative">{LANGUAGE_META[code].label}</span>
-          </button>
-        );
-      })}
-    </div>
   );
 }

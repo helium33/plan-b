@@ -1,101 +1,79 @@
 /**
- * Bridges Firebase Auth and Firestore into the auth store.
+ * Bridges Firebase Auth into the auth store, app-wide.
  *
- * Mounted once, above the router. Two subscriptions run here:
+ * ── Why the SDK is imported inside the effect ──────────────────────────────
+ * Auth is now needed on buyer screens — order history is tied to an account —
+ * so this provider has to be mounted above the whole app rather than only above
+ * the staff routes. A static import would then put `firebase/auth` on the
+ * critical path of a catalogue most visitors browse without ever signing in.
  *
- *  1. `onAuthStateChanged` — the session itself, restored from IndexedDB on
- *     load, which is why the store starts in `loading`.
- *  2. `subscribeToMember` — a live listener on the member record, so points
- *     credited by shop staff at the till appear on the account page without a
- *     refresh.
+ * Importing it inside the effect keeps it off the first paint entirely: the
+ * catalogue renders, then the SDK arrives and the session resolves a moment
+ * later. Nothing breaks in the gap because every consumer already has to handle
+ * `isLoading` — Firebase restores sessions from IndexedDB asynchronously, so
+ * that state existed regardless.
  *
- * The member listener is torn down and re-established whenever the uid changes.
- * Leaking it across a sign-out would keep streaming one customer's balance into
- * the next customer's session.
+ * It also writes `users/{uid}` on each new session, so any Google account that
+ * signs in is recorded without needing to be pre-registered. That write is
+ * fire-and-forget; see `firestore/users.ts` for why a failure there must not
+ * interrupt a successful sign-in.
  */
 import { type ReactNode, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import type { Unsubscribe } from 'firebase/firestore';
 
-import { auth } from '@/lib/firebase';
-import { getPhoneKeyForUid, subscribeToMember } from '@/lib/firestore/members';
-import { providerIdsFor } from '@/lib/auth';
+import { recordSignIn } from '@/lib/firestore/users';
 import { useAuthStore } from '@/app/stores/auth-store';
-import { useWishlistSync } from '@/app/hooks/use-wishlist';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Mounted here rather than in a page: the merge must happen on sign-in wherever
-  // the customer happens to be, and mounting it per-page would fire one merge per
-  // rendered product card.
-  useWishlistSync();
-
   useEffect(() => {
-    // Read actions off the store directly rather than through a hook, so this
-    // effect never re-runs and the auth listener is attached exactly once.
-    const { setSession, setMemberLoading, setMember, setMissingPhone, setMemberError } =
-      useAuthStore.getState();
+    // Read the action off the store directly rather than through a hook, so this
+    // effect never re-runs and the listener is attached exactly once.
+    const { setSession } = useAuthStore.getState();
 
-    let unsubscribeMember: Unsubscribe | null = null;
-    let activeUid: string | null = null;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
 
-    const stopMemberListener = () => {
-      unsubscribeMember?.();
-      unsubscribeMember = null;
-    };
+    // Tracks which uid has already been recorded, so a token refresh — which
+    // re-fires the listener with the same user — does not re-write the document
+    // on every hour-long refresh cycle.
+    let recordedUid: string | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        stopMemberListener();
-        activeUid = null;
-        setSession(null);
-        return;
-      }
+    void (async () => {
+      const [{ auth }, { onAuthStateChanged }] = await Promise.all([
+        import('@/lib/firebase-staff'),
+        import('firebase/auth'),
+      ]);
 
-      setSession({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        phoneNumber: user.phoneNumber,
-        emailVerified: user.emailVerified,
-        providerIds: providerIdsFor(user),
-      });
+      // The component may have unmounted while the chunk was downloading;
+      // attaching now would leak a listener with nothing to update.
+      if (cancelled) return;
 
-      // The same user re-emitting (a token refresh, a profile update) must not
-      // restart a working listener.
-      if (activeUid === user.uid && unsubscribeMember) return;
-
-      stopMemberListener();
-      activeUid = user.uid;
-      setMemberLoading();
-
-      try {
-        const phoneKey = await getPhoneKeyForUid(user.uid);
-
-        // Guard against a sign-out that landed while the lookup was in flight;
-        // without this the listener below would attach after the session ended.
-        if (activeUid !== user.uid) return;
-
-        if (!phoneKey) {
-          // Signed in with email or Google and no phone linked yet. Expected,
-          // not an error — the UI prompts for a number.
-          setMissingPhone();
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          recordedUid = null;
+          setSession(null);
           return;
         }
 
-        unsubscribeMember = subscribeToMember(
-          phoneKey,
-          (member) => setMember(phoneKey, member),
-          () => setMemberError('auth.errors.memberLoad'),
-        );
-      } catch {
-        if (activeUid === user.uid) setMemberError('auth.errors.memberLoad');
-      }
-    });
+        const session = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          emailVerified: user.emailVerified,
+        };
+
+        setSession(session);
+
+        if (recordedUid !== user.uid) {
+          recordedUid = user.uid;
+          void recordSignIn(session);
+        }
+      });
+    })();
 
     return () => {
-      stopMemberListener();
-      unsubscribeAuth();
+      cancelled = true;
+      unsubscribe?.();
     };
   }, []);
 

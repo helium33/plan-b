@@ -50,15 +50,18 @@ export async function setFramePublished(id: string, published: boolean): Promise
 }
 
 /**
- * Deletes a frame and its uploaded media.
+ * Deletes a frame.
  *
- * Media first, then the document. If the media delete fails halfway, the frame
- * document still exists and points at whatever survived — recoverable, and the
- * shop can retry. The other order would leave paid-for files in the bucket with
- * nothing referencing them, which nobody would ever notice.
+ * The media is *not* deleted with it — Cloudinary's destroy API needs an API
+ * secret that cannot live in a browser. `deleteFrameMedia` says so rather than
+ * pretending, and this returns that flag so the admin UI can tell the shop the
+ * photos are still in the Media Library. Silently orphaning them and reporting
+ * success would be the worse failure: nobody would ever go and clear them.
  */
-export async function deleteFrame(id: string): Promise<{ mediaDeleted: number; mediaFailed: number }> {
+export async function deleteFrame(
+  id: string,
+): Promise<{ mediaDeleted: number; requiresManualCleanup: boolean }> {
   const media = await deleteFrameMedia(id);
   await deleteDoc(doc(db, FRAMES_COLLECTION, id));
-  return { mediaDeleted: media.deleted, mediaFailed: media.failed };
+  return { mediaDeleted: media.deleted, requiresManualCleanup: media.requiresManualCleanup };
 }

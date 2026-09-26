@@ -11,7 +11,6 @@
  * the upload takes, and permanently if it fails.
  */
 import { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -23,7 +22,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { TextField } from '@/app/components/auth/fields';
-import { MultiSelect, SingleSelect } from '@/app/components/admin/attribute-select';
+import { SingleSelect } from '@/app/components/admin/attribute-select';
 import {
   ImagePicker,
   VideoPicker,
@@ -34,22 +33,20 @@ import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
 import { useDocumentTitle } from '@/app/hooks/use-document-title';
 import {
-  CATEGORIES,
-  COMFORT_FEATURES,
-  FACE_SHAPES,
-  FRAME_SIZES,
-  MATERIALS,
-  type Category,
-  type ComfortFeature,
-  type FaceShape,
-  type FrameSize,
-  type Material,
+  FRAME_CATEGORIES,
+  FRAME_MATERIALS,
+  FRAME_SHAPES,
+  STOCK_STATUSES,
+  type FrameCategory,
+  type FrameMaterial,
+  type FrameShape,
+  type StockStatus,
 } from '@/lib/attributes';
 import { saveFrame } from '@/lib/firestore/frame-writes';
 import { uploadMedia, variantFolder } from '@/lib/media/upload';
 import { type FrameVariant, frameSlug } from '@/lib/product';
 
-/** The brief's requirement: at least two images per colour. */
+/** At least two images per colour — one angle is not enough to judge a frame. */
 const MIN_IMAGES_PER_VARIANT = 2;
 
 /** Editing state for one colourway. */
@@ -82,16 +79,26 @@ export function AdminUploadPage() {
   const [brand, setBrand] = useState('');
   const [frameCode, setFrameCode] = useState('');
   const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [compareAtPrice, setCompareAtPrice] = useState('');
+  const [wholesalePrice, setWholesalePrice] = useState('');
   const [description, setDescription] = useState('');
 
-  const [faceShapes, setFaceShapes] = useState<FaceShape[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [frameSize, setFrameSize] = useState<FrameSize>('Medium');
-  const [material, setMaterial] = useState<Material>('Acetate');
-  const [comfortFeatures, setComfortFeatures] = useState<ComfortFeature[]>([]);
+  const [category, setCategory] = useState<FrameCategory>('Unisex');
+  const [material, setMaterial] = useState<FrameMaterial>('Metal');
+  const [shape, setShape] = useState<FrameShape>('Rectangle');
+  const [stockStatus, setStockStatus] = useState<StockStatus>('in-stock');
+
+  // Kept as strings so the inputs can be empty rather than forced to 0 — a
+  // frame nobody has measured is a real state, and `0` is not the same claim.
+  const [lensWidth, setLensWidth] = useState('');
+  const [bridge, setBridge] = useState('');
+  const [templeLength, setTempleLength] = useState('');
+  const [weightGrams, setWeightGrams] = useState('');
+
   const [published, setPublished] = useState(true);
+  // A case in the box is the norm for this range, so the form starts by saying
+  // so; "Best seller" is a shelf the shop curates, so it starts empty.
+  const [includesCase, setIncludesCase] = useState(true);
+  const [bestSeller, setBestSeller] = useState(false);
 
   const [variants, setVariants] = useState<VariantDraft[]>([newVariant(0)]);
 
@@ -124,20 +131,10 @@ export function AdminUploadPage() {
     if (!brand.trim()) problems.push(t('admin.errors.brandRequired'));
     if (!frameCode.trim()) problems.push(t('admin.errors.frameCodeRequired'));
 
-    const priceValue = Number(price);
-    if (!price.trim() || !Number.isFinite(priceValue) || priceValue <= 0) {
+    const priceValue = Number(wholesalePrice);
+    if (!wholesalePrice.trim() || !Number.isFinite(priceValue) || priceValue <= 0) {
       problems.push(t('admin.errors.priceRequired'));
     }
-
-    if (compareAtPrice.trim()) {
-      const compareValue = Number(compareAtPrice);
-      if (!Number.isFinite(compareValue) || compareValue <= priceValue) {
-        problems.push(t('admin.errors.compareTooLow'));
-      }
-    }
-
-    if (faceShapes.length === 0) problems.push(t('admin.errors.faceShapeRequired'));
-    if (categories.length === 0) problems.push(t('admin.errors.categoryRequired'));
 
     if (variants.length === 0) problems.push(t('admin.errors.variantRequired'));
 
@@ -256,27 +253,23 @@ export function AdminUploadPage() {
 
       setProgress({ label: t('admin.savingRecord'), fraction: 1 });
 
-      // `suitedFor` is derived from categories rather than asked for separately,
-      // so the two can never contradict each other.
-      const suitedFor = (() => {
-        const derived: Array<'Male' | 'Female' | 'Other'> = [];
-        if (categories.includes('Men')) derived.push('Male');
-        if (categories.includes('Women')) derived.push('Female');
-        return derived.length > 0 ? derived : ['Male' as const, 'Female' as const, 'Other' as const];
-      })();
-
       const { id } = await saveFrame({
         brand: brand.trim(),
         frameCode: frameCode.trim(),
         name: name.trim(),
-        price: Math.round(Number(price)),
-        compareAtPrice: compareAtPrice.trim() ? Math.round(Number(compareAtPrice)) : null,
-        faceShapes,
-        categories,
-        frameSize,
+        wholesalePrice: Math.round(Number(wholesalePrice)),
+        category,
         material,
-        comfortFeatures,
-        suitedFor,
+        shape,
+        stockStatus,
+        dimensions: {
+          lensWidth: Number(lensWidth) || 0,
+          bridge: Number(bridge) || 0,
+          templeLength: Number(templeLength) || 0,
+        },
+        weightGrams: Number(weightGrams) || null,
+        includesCase,
+        bestSeller,
         variants: uploadedVariants,
         description: description.trim(),
         published,
@@ -307,14 +300,21 @@ export function AdminUploadPage() {
     setBrand('');
     setFrameCode('');
     setName('');
-    setPrice('');
-    setCompareAtPrice('');
+    setWholesalePrice('');
     setDescription('');
-    setFaceShapes([]);
-    setCategories([]);
-    setFrameSize('Medium');
-    setMaterial('Acetate');
-    setComfortFeatures([]);
+    setCategory('Unisex');
+    setMaterial('Metal');
+    setShape('Rectangle');
+    setStockStatus('in-stock');
+    setLensWidth('');
+    setBridge('');
+    setTempleLength('');
+    setWeightGrams('');
+    // Not reset: `published` and `includesCase`, which describe how this shop
+    // works and hold true across a batch of uploads. `bestSeller` is a judgement
+    // about one model, and leaving it on would quietly promote the next frame
+    // typed in after it.
+    setBestSeller(false);
     setVariants([newVariant(0)]);
     setSaved(null);
     setErrors([]);
@@ -322,12 +322,13 @@ export function AdminUploadPage() {
 
   if (saved) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+      <div
         role="status"
-        className="rounded-2xl border border-emerald-600/30 bg-emerald-600/5 p-6"
+        // Tailwind's own entrance utility rather than an animation library —
+        // this was the last import of `motion/react` in the app, and keeping a
+        // 43 kB dependency alive for one fade-in on a staff-only success card
+        // was not a trade worth making.
+        className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 rounded-2xl border border-emerald-600/30 bg-emerald-600/5 p-6 duration-300"
       >
         <CheckCircle2
           className="h-8 w-8 text-emerald-600 dark:text-emerald-400"
@@ -344,7 +345,7 @@ export function AdminUploadPage() {
             {t('admin.addAnother')}
           </Button>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
@@ -405,25 +406,15 @@ export function AdminUploadPage() {
           disabled={saving}
         />
 
-        <div className="grid gap-5 sm:grid-cols-2">
-          <TextField
-            label={t('admin.priceLabel')}
-            value={price}
-            onChange={(next) => setPrice(next.replace(/[^\d]/g, ''))}
-            placeholder="68000"
-            hint={t('admin.priceHint')}
-            required
-            disabled={saving}
-          />
-          <TextField
-            label={t('admin.compareAtLabel')}
-            value={compareAtPrice}
-            onChange={(next) => setCompareAtPrice(next.replace(/[^\d]/g, ''))}
-            placeholder="85000"
-            hint={t('admin.compareAtHint')}
-            disabled={saving}
-          />
-        </div>
+        <TextField
+          label={t('admin.priceLabel')}
+          value={wholesalePrice}
+          onChange={(next) => setWholesalePrice(next.replace(/[^\d]/g, ''))}
+          placeholder="18000"
+          hint={t('admin.priceHint')}
+          required
+          disabled={saving}
+        />
 
         <div className="space-y-1.5">
           <label htmlFor="frame-description" className="block text-sm font-medium text-foreground">
@@ -449,52 +440,88 @@ export function AdminUploadPage() {
           <p className="mt-1 text-xs text-muted-foreground">{t('admin.attributesNote')}</p>
         </div>
 
-        <MultiSelect
-          label={t('admin.faceShapesLabel')}
-          values={faceShapes}
-          options={FACE_SHAPES}
-          optionLabel={(value) => t(`attributes.faceShape.${value}`)}
-          onChange={setFaceShapes}
-          required
-          hint={t('admin.faceShapesHint')}
-        />
-
-        <MultiSelect
-          label={t('admin.categoriesLabel')}
-          values={categories}
-          options={CATEGORIES}
-          optionLabel={(value) => t(`attributes.category.${value}`)}
-          onChange={setCategories}
-          required
-          hint={t('admin.categoriesHint')}
-        />
-
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-3">
           <SingleSelect
-            label={t('admin.frameSizeLabel')}
-            value={frameSize}
-            options={FRAME_SIZES}
-            optionLabel={(value) => t(`attributes.frameSize.${value}`)}
-            onChange={setFrameSize}
+            label={t('admin.categoryLabel')}
+            value={category}
+            options={FRAME_CATEGORIES}
+            optionLabel={(value) => t(`attributes.category.${value}`)}
+            onChange={setCategory}
             required
+            hint={t('admin.categoryHint')}
           />
           <SingleSelect
             label={t('admin.materialLabel')}
             value={material}
-            options={MATERIALS}
+            options={FRAME_MATERIALS}
             optionLabel={(value) => t(`attributes.material.${value}`)}
             onChange={setMaterial}
             required
+            hint={t('admin.materialHint')}
+          />
+          <SingleSelect
+            label={t('admin.shapeLabel')}
+            value={shape}
+            options={FRAME_SHAPES}
+            optionLabel={(value) => t(`attributes.shape.${value}`)}
+            onChange={setShape}
+            required
+            hint={t('admin.shapeHint')}
           />
         </div>
 
-        <MultiSelect
-          label={t('admin.comfortLabel')}
-          values={comfortFeatures}
-          options={COMFORT_FEATURES}
-          optionLabel={(value) => t(`attributes.comfort.${value}`)}
-          onChange={setComfortFeatures}
+        <SingleSelect
+          label={t('admin.stockLabel')}
+          value={stockStatus}
+          options={STOCK_STATUSES}
+          optionLabel={(value) => t(`attributes.stock.${value}`)}
+          onChange={setStockStatus}
+          required
+          hint={t('admin.stockHint')}
         />
+      </section>
+
+      {/* ── Measurements ──────────────────────────────────────────────────── */}
+      <section className="space-y-5 rounded-2xl border border-border bg-card p-6">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">
+            {t('admin.sectionMeasurements')}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('admin.measurementsNote')}</p>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-4">
+          <TextField
+            label={t('admin.lensWidthLabel')}
+            value={lensWidth}
+            onChange={(next) => setLensWidth(next.replace(/[^\d]/g, ''))}
+            placeholder="52"
+            disabled={saving}
+          />
+          <TextField
+            label={t('admin.bridgeLabel')}
+            value={bridge}
+            onChange={(next) => setBridge(next.replace(/[^\d]/g, ''))}
+            placeholder="18"
+            disabled={saving}
+          />
+          <TextField
+            label={t('admin.templeLabel')}
+            value={templeLength}
+            onChange={(next) => setTempleLength(next.replace(/[^\d]/g, ''))}
+            placeholder="142"
+            disabled={saving}
+          />
+          <TextField
+            label={t('admin.weightLabel')}
+            // Decimal point allowed: titanium frames are quoted as 8.2g and
+            // rounding that to 8 loses the number's whole selling point.
+            value={weightGrams}
+            onChange={(next) => setWeightGrams(next.replace(/[^\d.]/g, ''))}
+            placeholder="19"
+            disabled={saving}
+          />
+        </div>
       </section>
 
       {/* ── Variants ──────────────────────────────────────────────────────── */}
@@ -620,6 +647,28 @@ export function AdminUploadPage() {
             className="h-4 w-4 rounded border-border"
           />
           {t('admin.publishLabel')}
+        </label>
+
+        <label className="flex items-center gap-2.5 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={includesCase}
+            onChange={(event) => setIncludesCase(event.target.checked)}
+            disabled={saving}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="font-myanmar">{t('admin.includesCaseLabel')}</span>
+        </label>
+
+        <label className="flex items-center gap-2.5 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={bestSeller}
+            onChange={(event) => setBestSeller(event.target.checked)}
+            disabled={saving}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="font-myanmar">{t('admin.bestSellerLabel')}</span>
         </label>
 
         {progress ? (

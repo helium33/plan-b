@@ -1,26 +1,27 @@
 rules_version = '2';
 
-// Plan B Vision — Firestore security rules.
+// Plan B Wholesale — Firestore security rules.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 //
-// ── Read this before trusting the loyalty balance ──────────────────────────────
+// ── The whole data model, in one paragraph ────────────────────────────────────
 //
-// These rules stop one customer touching another customer's data. They do NOT
-// stop a customer manipulating their *own* loyalty points, and no rule can,
-// because the browser is currently the thing that decides how many points a
-// purchase earns.
+// Three collections. `frames` is the catalogue — world-readable, staff-writable.
+// `users` is a self-owned profile written on sign-in, which grants nothing.
+// `admins` is the allowlist, readable by the person it names and writable only
+// by someone who is already an admin.
 //
-// Firestore rules can validate the shape of a write, not its business
-// justification: `loyalty.points = 999999` is a structurally valid write from
-// the owning user. Closing that requires the award to move server-side —
-// a Cloud Function triggered by an order document, after which the two rules
-// marked ⚠️ below should be tightened to deny client writes to `loyalty` and to
-// the `points` subcollection outright.
+// Orders are absent on purpose: a wholesale order lives in the buyer's own
+// browser and leaves over Telegram or Viber, so there is no order collection and
+// nothing a client could tamper with.
 //
-// Until then the exposure is bounded and acceptable: points are only redeemable
-// against orders that a human confirms over Telegram (Module 8), so an inflated
-// balance is caught at the point it would cost money.
+// ── Why permissions are not a field on the user document ─────────────────────
+//
+// A user must be able to write their own profile. If the same document also
+// carried `role`, then "may write their own document" and "may not grant
+// themselves the catalogue" become one rule that has to be right about every
+// field forever. Splitting them means `users` can be permissive and `admins` can
+// be near-immutable, and neither has to know about the other.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -43,7 +44,10 @@ service cloud.firestore {
     function isBootstrapAdmin() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in ['kyawwinhtun564@gmail.com'];
+        && request.auth.token.email in [
+             'kyawwinhtun56@gmail.com',
+             'kyawwinhtun564@gmail.com'
+           ];
     }
 
     // Staff are listed by uid in `admins/{uid}`. An allowlist collection rather
@@ -58,112 +62,57 @@ service cloud.firestore {
             && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
 
-    // The member document id is the phone number in E.164 without the `+`
-    // (e.g. `959771234567`). Validating the format here stops a client
-    // scattering junk document ids through the collection.
-    function isPhoneKey(key) {
-      return key.matches('^95[0-9]{8,11}$');
-    }
-
-    // Ownership is the `uid` field on the member document, not the document id,
-    // because the id is a phone number that Auth knows nothing about.
-    function ownsMember(phoneKey) {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/members/$(phoneKey))
-        && get(/databases/$(database)/documents/members/$(phoneKey)).data.uid == request.auth.uid;
-    }
-
-    /* ── memberIndex/{uid} → { phoneKey } ────────────────────────────────── */
+    /* ── users/{uid} — who has signed in ─────────────────────────────────── */
     //
-    // The uid → phone pointer. A user may only read and write the document
-    // named after their own uid, which makes the mapping unenumerable: knowing
-    // someone's phone number tells you nothing about their uid, and vice versa.
+    // Written by `lib/firestore/users.ts` on each new session. Any Google account
+    // may create and maintain its **own** document and read nothing else.
+    //
+    // `list` is denied: a queryable users collection is an email directory for
+    // every buyer the shop has, and nothing in the app needs to enumerate it.
+    //
+    // The `uid` field is pinned to the document id so a record cannot be written
+    // claiming to be somebody else, and the writable fields are enumerated so
+    // this document can never grow a `role` or `isAdmin` that some future rule
+    // might be tempted to trust. Admin status lives in `admins/{uid}` only.
 
-    match /memberIndex/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
+    match /users/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
 
       allow create, update: if isSignedIn()
         && request.auth.uid == uid
-        && isPhoneKey(request.resource.data.phoneKey);
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly([
+             'uid', 'email', 'displayName', 'photoURL', 'emailVerified', 'lastSignInAt'
+           ]);
 
-      // Deleting the pointer would orphan the member record while leaving its
-      // points intact and unreachable. Support can do it with admin credentials.
-      allow delete: if false;
-    }
-
-    /* ── members/{phoneKey} ─────────────────────────────────────────────── */
-
-    match /members/{phoneKey} {
-
-      // Only ever your own record. Note this is a read of the document being
-      // read, which Firestore permits — `resource` is the existing document.
-      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
-
-      // No listing, ever. A queryable members collection is a phone-number
-      // directory for the entire customer base.
-      allow list: if false;
-
-      // Claiming a phone number. The record must be created already owned by
-      // the caller — otherwise anyone could pre-create records for phone
-      // numbers they do not control and lie in wait for the real owner.
-      allow create: if isSignedIn()
-        && isPhoneKey(phoneKey)
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.phone == '+' + phoneKey
-        && request.resource.data.phoneVerified == true;
-
-      // ⚠️ Two update paths.
-      allow update: if isSignedIn() && (
-        // 1. Your own record. Everything except `uid` may change: reassigning
-        //    `uid` is how one account would steal another's history.
-        (resource.data.uid == request.auth.uid
-          && request.resource.data.uid == resource.data.uid)
-        ||
-        // 2. Adopting a POS-imported record that no account owns yet. Only the
-        //    `uid` may be filled in, and only from null — so this cannot be used
-        //    to take over a record that already belongs to somebody.
-        (resource.data.uid == null
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.phone == resource.data.phone)
-      );
-
-      // Members are never deleted from the client. A deletion request is a
-      // support conversation — there are orders and in-store history attached.
+      // Account deletion is a support conversation, not a client operation.
       allow delete: if false;
 
-      /* ── members/{phoneKey}/points/{entryId} ──────────────────────────── */
+      /* ── users/{uid}/orders/{reference} — the buyer's own history ─────── */
       //
-      // Append-only ledger. `update` and `delete` are denied outright, so
-      // history cannot be rewritten even by its owner — which is what makes the
-      // ledger worth auditing against the cached balance.
+      // Nested under the owner, so ownership is the path rather than a field
+      // that has to be checked — there is no way to address someone else's
+      // order at all.
+      //
+      // `list` is allowed here, unlike on `users` itself: a buyer must be able
+      // to page their own history, and the collection is already scoped to them.
+      //
+      // Deliberately **not** validated field by field. This is the buyer's own
+      // record of what they sent; the shop's authoritative copy is the Telegram
+      // message. Constraining the shape here would mean editing the rules every
+      // time the voucher gains a line, for a document only its owner can read.
 
-      match /points/{entryId} {
-        allow read: if ownsMember(phoneKey);
-
-        // ⚠️ Client-written until points move into a Cloud Function. The shape
-        // is validated so a malformed entry cannot break the account page, and
-        // `balanceAfter` must agree with the member document the same
-        // transaction is writing.
-        allow create: if ownsMember(phoneKey)
-          && request.resource.data.keys().hasAll(['points', 'reason', 'balanceAfter', 'createdAt'])
-          && request.resource.data.points is int
-          && request.resource.data.balanceAfter is int
-          && request.resource.data.balanceAfter >= 0
-          && (request.resource.data.reason in [
-               'signup-bonus', 'onboarding-bonus', 'purchase', 'review-bonus',
-               'redemption', 'in-store-sync', 'manual-adjustment'
-             ]);
-
-        allow update, delete: if false;
+      match /orders/{reference} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
     }
 
     /* ── admins/{uid} ────────────────────────────────────────────────────── */
     //
     // Readable by the signed-in staff member it names, so the app can show or
-    // hide admin tools. Never writable from a browser: a client that could
-    // create its own entry here would be able to grant itself the catalogue.
-    // Create these in the Firebase console.
+    // hide admin tools. Never writable by a buyer — a client that could create
+    // its own entry here would be able to grant itself the catalogue.
 
     match /admins/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
@@ -183,9 +132,12 @@ service cloud.firestore {
 
     /* ── frames/{frameId} — the catalogue ────────────────────────────────── */
     //
-    // Public read: shoppers browse before they sign in, and a catalogue behind a
-    // login is a catalogue nobody finds. Nothing here is sensitive — it is the
-    // same information printed on the price tags.
+    // Public read: buyers browse without an account, by design — the app has no
+    // buyer sign-in at all. Nothing here is sensitive beyond the trade price,
+    // which is on the price list every stockist already holds.
+    //
+    // If trade prices must not be public, the fix is a buyer login and a rule
+    // requiring it — not obscurity in the client, which stops nobody.
     //
     // Writes are staff-only. Field validation is intentionally light because the
     // upload form is the only writer and `normalizeFrame` in
@@ -197,76 +149,42 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    /* ── appointments/{id} — eye tests and fittings ──────────────────────── */
+    /* ── creditShops/{id}, creditOrders/{id} — the wholesale credit ledger ── */
     //
-    // Create-only from the client, and only ever as your own `requested`
-    // booking. Three things are pinned here rather than trusted from the form:
-    // the `uid`, the `status`, and the shape of the date and time — because a
-    // client that could write `status: 'confirmed'` would let a customer walk in
-    // holding a slot the shop never agreed to.
+    // Staff-only, full stop: no public read, unlike `frames`. A shop's credit
+    // limit and running balance are not information a catalogue browser has any
+    // reason to see, and unlike the catalogue there is no "buyer view" of this
+    // data at all — a shop's own copy of a voucher is the message they were
+    // sent over Telegram, not a page they sign in and read.
     //
-    // No client updates or deletes: rescheduling releases a slot, and two
-    // browsers racing to release the same one is a double-booking. That
-    // arbitration belongs to staff.
+    // Field validation is intentionally light, same reasoning as `frames`: the
+    // admin credit page is the only writer, and `lib/firestore/credit.ts`
+    // already normalises every read defensively. `creditOrders` additionally
+    // denies `update` outright — a saved voucher is a record of what was agreed
+    // with a shop, and letting it be edited after the fact would mean the
+    // number a shop was quoted and the number in the ledger could silently
+    // diverge. Only `delete` is allowed, for removing a mistaken entry, and
+    // deleting is a deliberate, visible act rather than the kind of quiet edit
+    // a stale-looking record invites.
 
-    match /appointments/{appointmentId} {
-      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
-
-      allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == 'requested'
-        && isPhoneKey(request.resource.data.phoneKey)
-        // Bracket notation, not `.service`: `service` is a reserved keyword in the
-        // rules language (`service cloud.firestore { … }`), so dot access on a
-        // field of that name derails the parser with a misleading error on the
-        // *next* token. The stored field is still named `service`.
-        && (request.resource.data['service'] in ['eye-test', 'frame-fitting', 'adjustment', 'collection'])
-        // `YYYY-MM-DD`, so a malformed date cannot break the shop's day view.
-        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && request.resource.data.startMinutes is int
-        && request.resource.data.startMinutes >= 0
-        && request.resource.data.startMinutes < 1440
-        && request.resource.data.durationMinutes is int
-        && request.resource.data.durationMinutes > 0
-        // Bounded so a booking cannot be used as free storage.
-        && request.resource.data.notes.size() <= 500
-        && request.resource.data.name.size() <= 120;
-
-      allow update, delete: if false;
+    match /creditShops/{shopId} {
+      allow read, write: if isAdmin();
     }
 
-    /* ── reviews/{id} — customer reviews with photos ─────────────────────── */
-    //
-    // Public read, because reviews are the point. Create requires a signed-in
-    // member and forces `status: 'pending'` — reviews carry photographs of real
-    // customers' faces, and that is not content to publish unseen. Staff move
-    // them to `published`.
-    //
-    // No client update or delete: letting an author edit a published review means
-    // a five-star review can become abuse after moderation has approved it.
-
-    match /reviews/{reviewId} {
-      allow read: if true;
-
-      allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && isPhoneKey(request.resource.data.phoneKey)
-        && request.resource.data.rating is int
-        && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5
-        && request.resource.data.title.size() <= 120
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 1500
-        && request.resource.data.photos.size() <= 3;
-
-      allow update, delete: if isAdmin();
+    match /creditOrders/{orderId} {
+      allow read, create, delete: if isAdmin();
+      allow update: if false;
     }
 
     /* ── Everything else ─────────────────────────────────────────────────── */
     //
-    // Denied by default. Orders (Module 8) get their own block when built — a
-    // permissive catch-all now would quietly grant access the moment it exists.
+    // Denied by default, including the retail collections this app used to have
+    // (`members`, `memberIndex`, `appointments`, `reviews`). Leaving their rules
+    // in place after the features were deleted would keep granting access to data
+    // nothing writes and nobody reads — an attack surface with no upside.
+    //
+    // Note this also covers `admins` *listing* and any collection added later:
+    // a new feature has to add its rule deliberately rather than inherit one.
 
     match /{document=**} {
       allow read, write: if false;

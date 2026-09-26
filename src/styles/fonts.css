@@ -6,7 +6,11 @@
  * to whatever the OS happens to ship — Windows' default Myanmar font breaks
  * medial consonants badly.
  */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap');
+
+/* Playfair Display carries the Pinky Beauty headings. It is a display serif —
+   only ever used at heading sizes, never for body copy, where its thin strokes
+   stop being legible on a phone. */
 
 /* The `--font-sans` / `--font-myanmar` stacks themselves live in theme.css's
    `@theme` block so Tailwind generates `font-sans` / `font-myanmar` utilities. */

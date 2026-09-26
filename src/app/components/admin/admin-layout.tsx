@@ -11,7 +11,7 @@
  */
 import { useState } from 'react';
 import { Outlet, NavLink, Link } from 'react-router-dom';
-import { Check, Database, KeyRound, Loader2, Package, ShieldAlert, Upload } from 'lucide-react';
+import { Check, Database, KeyRound, Loader2, Package, ShieldAlert, Upload, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/app/components/ui/button';
@@ -20,11 +20,12 @@ import { ROUTES } from '@/app/config/navigation';
 import { useAuth } from '@/app/hooks/use-auth';
 import { useIsAdmin } from '@/app/hooks/use-is-admin';
 import { AdminSetupInstructions } from '@/app/components/admin/setup-instructions';
+import { isBootstrapAdminEmail } from '@/config/admins';
 
 export function AdminLayout() {
   const { t } = useTranslation();
   const { isAdmin, checking, viaBootstrapEmail, hasAdminRecord, claimAdminRecord } = useIsAdmin();
-  const { isSignedIn, isLoading } = useAuth();
+  const { isSignedIn, isLoading, user } = useAuth();
   const [claiming, setClaiming] = useState(false);
   const [claimFailed, setClaimFailed] = useState(false);
 
@@ -66,7 +67,31 @@ export function AdminLayout() {
           </h1>
         </div>
 
-        <AdminSetupInstructions />
+        {/*
+          Anyone can sign in now, so most people who land here are buyers who
+          typed the URL — and telling them to open the Firebase console is
+          nonsense they cannot act on.
+
+          The check is the *raw* email list, not `viaBootstrapEmail`: that flag
+          also requires a verified address and is therefore always false inside
+          this branch. The case worth catching is an owner whose address is
+          listed but not yet verified — for them the setup panel, which explains
+          the verification requirement, is exactly the right screen.
+        */}
+        {isBootstrapAdminEmail(user?.email) ? (
+          <AdminSetupInstructions />
+        ) : (
+          <>
+            <p className="mt-4 max-w-prose text-sm leading-relaxed text-muted-foreground">
+              {t('admin.buyerNotAdminBody')}
+            </p>
+            <Button asChild className="mt-6">
+              <Link to={ROUTES.catalog}>
+                <span className="font-myanmar">{t('order.emptyAction')}</span>
+              </Link>
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -76,6 +101,7 @@ export function AdminLayout() {
   const tabs = [
     { to: ROUTES.admin, label: t('admin.tabs.upload'), icon: Upload, end: true },
     { to: ROUTES.adminFrames, label: t('admin.tabs.frames'), icon: Package, end: false },
+    { to: ROUTES.adminCredit, label: t('admin.tabs.credit'), icon: Wallet, end: false },
     { to: ROUTES.adminSeed, label: t('admin.tabs.seed'), icon: Database, end: false },
   ];
 

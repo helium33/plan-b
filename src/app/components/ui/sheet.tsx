@@ -6,6 +6,27 @@ import { XIcon } from "lucide-react";
 
 import { cn } from "./utils";
 
+/**
+ * ── Why the sheet animates in but not out ─────────────────────────────────
+ * Radix keeps a closing node mounted until it observes an `animationend` for
+ * the exit animation. When that event never arrives the sheet stays up
+ * *forever*, and because Radix also sets `pointer-events: none` on `<body>`
+ * while a dialog is open, the whole page goes dead — the worst failure this
+ * component can have, and one that cannot be recovered from without a reload.
+ *
+ * The event genuinely can fail to arrive. CSS animations do not advance in a
+ * tab the browser is not compositing, so a sheet closed in a backgrounded or
+ * hidden tab freezes mid-exit and is still frozen when the buyer comes back.
+ * (That is not hypothetical: it is exactly what this component did under
+ * automated inspection, where the page reported zero animation frames.)
+ *
+ * So the exit animations are removed and only the entrance is animated.
+ * Closing is instant, which is what a dismissal should feel like anyway, and
+ * the unmount no longer depends on an event the browser may never send. The
+ * walkthrough dialog in `onboarding/how-to-use.tsx` reaches the same
+ * conclusion from a different cause — see the note there.
+ */
+
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
@@ -28,45 +49,54 @@ function SheetPortal({
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
 }
 
-function SheetOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
-  return (
-    <SheetPrimitive.Overlay
-      data-slot="sheet-overlay"
-      className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
+/**
+ * `forwardRef`, unlike most of the components in this folder.
+ *
+ * Radix wraps the overlay and the content in `Presence`, which keeps a closing
+ * node mounted until it observes the exit animation ending — and it needs a ref
+ * to the DOM node to do that. As a plain function component this silently
+ * dropped the ref (React 18 warns about it), which risks leaving a dismissed
+ * sheet's overlay on top of the page. The same failure mode is documented at
+ * length in `onboarding/how-to-use.tsx`.
+ */
+const SheetOverlay = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <SheetPrimitive.Overlay
+    ref={ref}
+    data-slot="sheet-overlay"
+    className={cn(
+      "data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+      className,
+    )}
+    {...props}
+  />
+));
+SheetOverlay.displayName = "SheetOverlay";
 
-function SheetContent({
-  className,
-  children,
-  side = "right",
-  ...props
-}: React.ComponentProps<typeof SheetPrimitive.Content> & {
-  side?: "top" | "right" | "bottom" | "left";
-}) {
+/** Forwards its ref for the same reason `SheetOverlay` does — see there. */
+const SheetContent = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & {
+    side?: "top" | "right" | "bottom" | "left";
+  }
+>(({ className, children, side = "right", ...props }, ref) => {
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
+        ref={ref}
         data-slot="sheet-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          "bg-background data-[state=open]:animate-in fixed z-50 flex flex-col gap-4 shadow-lg data-[state=open]:duration-500",
           side === "right" &&
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+            "data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
-          side === "top" &&
-            "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
+            "data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
+          side === "top" && "data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&
-            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
+            "data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className,
         )}
         {...props}
@@ -79,7 +109,8 @@ function SheetContent({
       </SheetPrimitive.Content>
     </SheetPortal>
   );
-}
+});
+SheetContent.displayName = "SheetContent";
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (

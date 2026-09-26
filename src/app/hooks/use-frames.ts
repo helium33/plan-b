@@ -1,13 +1,14 @@
 /**
  * Loads the catalogue once for a page.
  *
- * Extracted because the shop, wishlist and compare pages all need the same
- * fetch-and-handle-failure dance, and three copies of it would drift. Returns the
+ * Extracted because the catalogue and the voucher both need the same
+ * fetch-and-handle-failure dance, and two copies of it would drift. Returns the
  * three states a page has to render — loading, failed, loaded — rather than a
  * bare array, so none of them can be forgotten.
  */
 import { useEffect, useState } from 'react';
 
+import { env } from '@/lib/env';
 import { listFrames } from '@/lib/firestore/frames';
 import type { FrameDoc } from '@/lib/product';
 
@@ -15,9 +16,18 @@ export type UseFrames = {
   /** `null` while loading. */
   frames: FrameDoc[] | null;
   failed: boolean;
-  /** Look up by id — wishlist and compare both store ids, not documents. */
-  byId: (id: string) => FrameDoc | undefined;
 };
+
+/**
+ * The demo catalogue, loaded only when `VITE_USE_SAMPLE_CATALOGUE=true`.
+ *
+ * A dynamic import so the sample data and its generated artwork stay in their
+ * own chunk, never fetched by a real deployment. The flag exists because this
+ * app is useless to look at without a catalogue, and standing up a Firebase
+ * project is a poor first step for someone who just wants to see whether the
+ * ordering flow suits their shop.
+ */
+const loadSamples = () => import('@/lib/seed/sample-frames');
 
 export function useFrames(): UseFrames {
   const [frames, setFrames] = useState<FrameDoc[] | null>(null);
@@ -26,7 +36,16 @@ export function useFrames(): UseFrames {
   useEffect(() => {
     let active = true;
 
-    listFrames()
+    const request = env.useSampleCatalogue
+      ? loadSamples().then(({ SAMPLE_FRAMES }) =>
+          // Filtered here rather than in the fixture, so the demo shows exactly
+          // what a buyer would see and the unpublished sample still proves the
+          // `published` flag is honoured.
+          SAMPLE_FRAMES.filter((frame) => frame.published),
+        )
+      : listFrames();
+
+    request
       .then((result) => {
         if (active) setFrames(result);
       })
@@ -39,23 +58,5 @@ export function useFrames(): UseFrames {
     };
   }, []);
 
-  return {
-    frames,
-    failed,
-    byId: (id) => frames?.find((frame) => frame.id === id),
-  };
-}
-
-/**
- * Resolves a list of ids to frames, in the order the ids were given.
- *
- * Ids that no longer resolve are dropped silently. That happens for real: a frame
- * saved to a wishlist last month can be deleted or unpublished by the shop since,
- * and the alternative — rendering a gap or an error per missing frame — would make
- * the shop's own catalogue edits look like a bug in the customer's list.
- */
-export function resolveFrames(ids: string[], frames: FrameDoc[] | null): FrameDoc[] {
-  if (!frames) return [];
-  const index = new Map(frames.map((frame) => [frame.id, frame]));
-  return ids.map((id) => index.get(id)).filter((frame): frame is FrameDoc => frame !== undefined);
+  return { frames, failed };
 }

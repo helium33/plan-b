@@ -10,7 +10,7 @@ export function NotFoundPage() {
   useDocumentTitle(t('pages.notFound.title'));
 
   return (
-    <div className="container-page flex flex-1 items-center justify-center py-24">
+    <div className="flex min-h-dvh items-center justify-center px-5 py-24">
       <div className="max-w-md text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-muted text-muted-foreground">
           <Compass className="h-6 w-6" strokeWidth={1.8} />
@@ -25,7 +25,7 @@ export function NotFoundPage() {
         </p>
 
         <Link
-          to={ROUTES.home}
+          to={ROUTES.catalog}
           className="mt-7 inline-flex items-center rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {t('pages.notFound.cta')}
