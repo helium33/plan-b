@@ -1,7 +1,7 @@
 /**
  * The "How to order" video, shown on launch until dismissed for good.
  *
- * A narrated clip of the real app — a woman's voice in Burmese walking through
+ * A narrated clip of the real app — a native Burmese woman's voice walking through
  * sign-in, swiping, choosing a colour, ordering, credit and the on-time
  * discount, with each step captioned on screen. It replaced three animated
  * cartoon scenes, which showed an app that did not quite look like this one.

@@ -101,7 +101,7 @@ export const my: TranslationSchema = {
 
   onboarding: {
     title: 'Order တင်နည်း',
-    subtitle: 'အသံဖြင့် ရှင်းပြထားသော ဗီဒီယို — ၄၅ စက္ကန့်ခန့်။',
+    subtitle: 'အသံဖြင့် ရှင်းပြထားသော ဗီဒီယို — ၅၀ စက္ကန့်ခန့်။',
     start: 'Order စတင်မည်',
     next: 'ရှေ့သို့',
     skip: 'ကျော်မည် / Skip',
