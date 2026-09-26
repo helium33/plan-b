@@ -19,9 +19,45 @@
  * interrupt a successful sign-in.
  */
 import { type ReactNode, useEffect } from 'react';
+import type { User } from 'firebase/auth';
 
 import { recordSignIn } from '@/lib/firestore/users';
-import { useAuthStore } from '@/app/stores/auth-store';
+import { asPosRole } from '@/lib/pos/schema';
+import { NO_CLAIMS, useAuthStore } from '@/app/stores/auth-store';
+
+/**
+ * Reads the role and shop off the ID token — the values the rules check.
+ *
+ * A token minted before the POS granted a role does not carry it, and would
+ * not for up to an hour, so one forced refresh is tried before concluding the
+ * account has none. Offline, the cached token's claims stand. The result is
+ * dropped if a different user signed in while it was in flight.
+ */
+async function readClaims(user: User): Promise<void> {
+  const { setClaims } = useAuthStore.getState();
+
+  try {
+    let { claims } = await user.getIdTokenResult();
+    if (!claims.role) {
+      try {
+        ({ claims } = await user.getIdTokenResult(true));
+      } catch {
+        /* Offline — keep what the cached token says. */
+      }
+    }
+
+    if (useAuthStore.getState().user?.uid !== user.uid) return;
+
+    const role = asPosRole(claims.role);
+    const shopId = typeof claims.shopId === 'string' && claims.shopId ? claims.shopId : null;
+
+    // A SHOP claim without a shop is a half-provisioned account; treating it
+    // as a shop would point every read at `shops/null`.
+    setClaims(role === 'SHOP' && !shopId ? NO_CLAIMS : { role, shopId });
+  } catch {
+    if (useAuthStore.getState().user?.uid === user.uid) setClaims(NO_CLAIMS);
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -63,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         setSession(session);
+        void readClaims(user);
 
         if (recordedUid !== user.uid) {
           recordedUid = user.uid;

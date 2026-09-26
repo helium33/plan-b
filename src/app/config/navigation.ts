@@ -25,6 +25,14 @@ export const ROUTES = {
   pinky: '/pinky',
 
   signIn: '/sign-in',
+  /**
+   * Where signing out goes. The goodbye screen ends the session itself and
+   * then shows the sign-in screen — see `components/auth/auth-screens.tsx`.
+   */
+  goodbye: '/goodbye',
+
+  /** A shop's credit dashboard: limit, used, remaining, payment term, loyalty. */
+  credit: '/credit',
 
   /** Admin area. Index tab is the upload form; children are nested under it. */
   admin: '/admin',

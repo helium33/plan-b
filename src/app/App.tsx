@@ -42,6 +42,17 @@ const AdminSection = lazy(() =>
 const SignInPage = lazy(() =>
   import('@/app/pages/sign-in').then((m) => ({ default: m.SignInPage })),
 );
+const GoodbyeScreen = lazy(() =>
+  import('@/app/components/auth/auth-screens').then((m) => ({ default: m.GoodbyeScreen })),
+);
+
+/**
+ * The credit dashboard. Lazy for the same reason as the staff screens: it
+ * carries the charting library, which a buyer browsing frames never needs.
+ */
+const CreditPage = lazy(() =>
+  import('@/app/pages/credit').then((m) => ({ default: m.CreditPage })),
+);
 
 function RouteFallback() {
   return (
@@ -77,6 +88,14 @@ export default function App() {
               <Route path={ROUTES.catalog} element={<CatalogPage />} />
               <Route path={ROUTES.frame} element={<FrameDetailPage />} />
               <Route path={ROUTES.order} element={<OrderPage />} />
+              <Route
+                path={ROUTES.credit}
+                element={
+                  <Suspense fallback={<RouteFallback />}>
+                    <CreditPage />
+                  </Suspense>
+                }
+              />
             </Route>
 
             {/* ── Pinky Beauty ────────────────────────────────────────────── */}
@@ -95,6 +114,14 @@ export default function App() {
               element={
                 <Suspense fallback={<RouteFallback />}>
                   <SignInPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path={ROUTES.goodbye}
+              element={
+                <Suspense fallback={<RouteFallback />}>
+                  <GoodbyeScreen />
                 </Suspense>
               }
             />

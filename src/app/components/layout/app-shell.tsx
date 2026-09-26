@@ -13,9 +13,13 @@
  *
  * The sidebar shows the filter groups only on the catalogue route. Leaving them
  * up on the voucher would be a panel of controls that change nothing on screen.
+ *
+ * A third tab, Credit, appears only for accounts that have a credit account
+ * behind them — a shop, or staff ordering for shops. For everyone else the
+ * loop stays the two tabs it always was.
  */
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { CircleHelp, Grid2x2, ReceiptText, UserRound } from 'lucide-react';
+import { CircleHelp, Grid2x2, ReceiptText, UserRound, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { CatalogFilterGroups } from '@/app/components/catalog/filter-groups';
@@ -27,13 +31,16 @@ import { HowToUseModal } from '@/app/components/onboarding/how-to-use';
 import { CartDrawer } from '@/app/components/order/cart-drawer';
 import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
+import { useRole } from '@/app/hooks/use-role';
 import { draftPieceCount, useOrderStore } from '@/app/stores/order-store';
 import { useOnboardingStore } from '@/app/stores/onboarding-store';
 
-const TABS = [
+const BASE_TABS = [
   { to: ROUTES.catalog, labelKey: 'nav.catalog', icon: Grid2x2, end: true },
   { to: ROUTES.order, labelKey: 'nav.order', icon: ReceiptText, end: false },
 ] as const;
+
+const CREDIT_TAB = { to: ROUTES.credit, labelKey: 'nav.credit', icon: Wallet, end: false } as const;
 
 /** The teal monogram, at whatever size the caller needs. */
 function Brand({ className }: { className?: string }) {
@@ -63,6 +70,9 @@ export function AppShell() {
 
   const quantities = useOrderStore((s) => s.quantities);
   const replay = useOnboardingStore((s) => s.replay);
+  const { ready, can } = useRole();
+
+  const tabs = ready && can('credit:view') ? [...BASE_TABS, CREDIT_TAB] : BASE_TABS;
 
   const pieces = draftPieceCount(quantities);
   const onCatalog = pathname === ROUTES.catalog;
@@ -84,7 +94,7 @@ export function AppShell() {
         <Brand className="px-2" />
 
         <nav className="mt-6 space-y-1">
-          {TABS.map(({ to, labelKey, icon: Icon, end }) => (
+          {tabs.map(({ to, labelKey, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -187,7 +197,7 @@ export function AppShell() {
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
         >
           <div className="mx-auto flex w-full max-w-6xl">
-            {TABS.map(({ to, labelKey, icon: Icon, end }) => (
+            {tabs.map(({ to, labelKey, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
