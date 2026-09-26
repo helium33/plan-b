@@ -101,7 +101,7 @@ export const en = {
 
   onboarding: {
     title: 'How to order',
-    subtitle: 'Three steps, about a minute.',
+    subtitle: 'A spoken guide in Burmese, about 45 seconds.',
     start: 'Start ordering',
     next: 'Next',
     /** Both languages, deliberately — this is the escape hatch. */
