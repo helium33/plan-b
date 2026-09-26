@@ -583,6 +583,8 @@ export const my: TranslationSchema = {
   },
 
   swiper: {
+    addToCart: 'ခြင်းထဲထည့်',
+    added: '{{model}} {{colour}} ကို ခြင်းထဲ ထည့်ပြီး',
     carousel: 'ကိုင်း ကြည့်ရှုရန်',
     label: 'ကိုင်းများ တစ်ခုချင်း — နောက်တစ်ခုအတွက် အပေါ်သို့ ပွတ်ပါ',
     slide: 'ကိုင်း',

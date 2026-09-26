@@ -13,14 +13,14 @@
  * there is no JavaScript between a finger and the page. JavaScript only
  * watches which slide is showing, for the counter and the keyboard.
  *
- * ── What sits on the photograph ────────────────────────────────────────────
- * The wishlist heart in the corner, and at the bottom one panel: the model
- * number, its colours as swatches, and the Buy button. A swatch changes the
- * photograph to that colour — the collage became the swatch row, so the one
- * image on screen is always the colour being looked at — and Buy opens the
- * order sheet on that colour. Signed out, Buy becomes "Sign in to shop", in
- * the same place and size: the screen does not change shape, only where the
- * button goes.
+ * ── The image, then the controls ──────────────────────────────────────────
+ * The photograph fills the top of the screen with only the wishlist heart and
+ * the counter in its corner. Everything you press sits below it, never on it:
+ * the model number, the colour swatches (a swatch changes the photograph to
+ * that colour), and two buttons — Add to Cart puts one piece of the chosen
+ * colour in the cart, Buy opens the order sheet on that colour to set
+ * quantities. Signed out, the two buttons become "Sign in to shop", in the
+ * same place: the screen does not change shape, only where the button goes.
  *
  * ── Images ─────────────────────────────────────────────────────────────────
  * Only slides within a few of the one showing render their photo. A catalogue
@@ -29,8 +29,9 @@
  */
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ShoppingBag, Sparkles, Star } from 'lucide-react';
+import { ChevronDown, ChevronUp, ShoppingBag, ShoppingCart, Sparkles, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { FavouriteButton } from '@/app/components/catalog/frame-chrome';
 import { FrameImage } from '@/app/components/catalog/frame-image';
@@ -75,60 +76,69 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
     return line ? Object.values(line).reduce((sum, qty) => sum + qty, 0) : 0;
   });
 
+  const adjustQty = useOrderStore((state) => state.adjustQty);
+
   const name = frameDisplayName(frame);
   const image = shown?.images[0] ?? primaryImage(frame);
   const extra = variants.length - MAX_SWATCHES;
+
+  const addOne = () => {
+    if (!shown) return;
+    adjustQty(frame.id, shown.cNumber, 1);
+    toast.success(t('swiper.added', { model: frame.frameCode, colour: shown.cNumber }));
+  };
 
   return (
     <article
       aria-roledescription={t('swiper.slide')}
       aria-label={t('swiper.position', { current: index + 1, total, name })}
-      className="relative h-full w-full overflow-hidden bg-white"
+      className="flex h-full w-full flex-col overflow-hidden bg-white"
     >
-      {/* ── The one image ────────────────────────────────────────────────── */}
-      {near ? (
-        <FrameImage
-          src={image}
-          alt={shown ? `${name} — ${shown.cNumber} ${shown.colorName}` : name}
-          eager
-          className="h-full w-full object-contain pb-40 pt-14"
-        />
-      ) : (
-        <div className="h-full w-full" aria-hidden="true" />
-      )}
+      {/* ── The one image, with the wishlist heart in its corner ──────────── */}
+      <div className="relative min-h-0 flex-1">
+        {near ? (
+          <FrameImage
+            src={image}
+            alt={shown ? `${name} — ${shown.cNumber} ${shown.colorName}` : name}
+            eager
+            className="h-full w-full object-contain px-4 pb-2 pt-14"
+          />
+        ) : (
+          <div className="h-full w-full" aria-hidden="true" />
+        )}
 
-      {/* ── Top: badges, counter, wishlist ─────────────────────────────── */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-        <div className="flex flex-wrap gap-1.5">
-          {frame.bestSeller ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-primary-foreground shadow-sm">
-              <Star className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
-              <span className="font-myanmar">{t('catalog.bestSellerBadge')}</span>
-            </span>
-          ) : null}
-          {isNew ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-background shadow-sm">
-              <Sparkles className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
-              <span className="font-myanmar">{t('swiper.newBadge')}</span>
-            </span>
-          ) : null}
-        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {frame.bestSeller ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-primary-foreground shadow-sm">
+                <Star className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
+                <span className="font-myanmar">{t('catalog.bestSellerBadge')}</span>
+              </span>
+            ) : null}
+            {isNew ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-background shadow-sm">
+                <Sparkles className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
+                <span className="font-myanmar">{t('swiper.newBadge')}</span>
+              </span>
+            ) : null}
+          </div>
 
-        <div className="pointer-events-auto flex items-center gap-2">
-          <span
-            className="rounded-full bg-black/55 px-2.5 py-1 text-[0.7rem] font-semibold tabular-nums text-white"
-            aria-hidden="true"
-          >
-            {index + 1} / {total}
-          </span>
-          <FavouriteButton frameId={frame.id} frameName={name} />
+          <div className="pointer-events-auto flex items-center gap-2">
+            <span
+              className="rounded-full bg-black/55 px-2.5 py-1 text-[0.7rem] font-semibold tabular-nums text-white"
+              aria-hidden="true"
+            >
+              {index + 1} / {total}
+            </span>
+            <FavouriteButton frameId={frame.id} frameName={name} />
+          </div>
         </div>
       </div>
 
-      {/* ── Bottom: model, colours, the one button ────────────────────── */}
-      <div className="absolute inset-x-0 bottom-0 p-3">
-        <div className="mx-auto max-w-xl rounded-3xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md">
-          <div className="flex items-center justify-between gap-3 px-1">
+      {/* ── Below the image: model, colour, Add to Cart, Buy ─────────────── */}
+      <div className="shrink-0 border-t border-border bg-background px-4 pb-3 pt-3">
+        <div className="mx-auto max-w-xl">
+          <div className="flex items-center justify-between gap-3">
             <p className="min-w-0 truncate text-lg font-bold tracking-tight text-foreground" dir="ltr">
               {t('catalog.modelLabel')}: {frame.frameCode}
             </p>
@@ -143,7 +153,7 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
             <div
               role="radiogroup"
               aria-label={t('swiper.colours')}
-              className="mt-2 flex items-center gap-1.5 overflow-x-auto px-0.5 pb-0.5"
+              className="mt-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5"
             >
               {variants.slice(0, MAX_SWATCHES).map((variant) => {
                 const active = variant.cNumber === shown?.cNumber;
@@ -155,10 +165,7 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
                     aria-checked={active}
                     aria-label={`${variant.cNumber} ${variant.colorName}`}
                     onClick={() => setShownC(variant.cNumber)}
-                    className={cn(
-                      'grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    )}
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span
                       aria-hidden="true"
@@ -180,17 +187,28 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
           ) : null}
 
           {isSignedIn ? (
-            <button
-              type="button"
-              onClick={() => onBuy(frame, shown?.cNumber ?? null)}
-              className="mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-base font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <ShoppingBag className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
-              <span className="font-myanmar">{t('catalog.buyNow')}</span>
-              {pieces > 0 ? (
-                <span className="rounded-full bg-white/20 px-2 text-sm tabular-nums">{pieces}</span>
-              ) : null}
-            </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={addOne}
+                disabled={!shown}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-3 text-[0.95rem] font-bold text-primary transition-colors hover:bg-primary/5 active:scale-[0.99] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <ShoppingCart className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+                <span className="truncate font-myanmar">{t('swiper.addToCart')}</span>
+                {pieces > 0 ? (
+                  <span className="rounded-full bg-primary/15 px-2 text-sm tabular-nums">{pieces}</span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => onBuy(frame, shown?.cNumber ?? null)}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-[0.95rem] font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <ShoppingBag className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+                <span className="truncate font-myanmar">{t('catalog.buyNow')}</span>
+              </button>
+            </div>
           ) : (
             <Link
               to={ROUTES.signIn}

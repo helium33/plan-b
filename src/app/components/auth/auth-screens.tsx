@@ -38,26 +38,32 @@ const GOODBYE_HOLD_MS = 2_200;
 const GOODBYE_FADE_MS = 500;
 
 /**
- * The sign-in screen's frame: logo, welcome line, then whatever form or
- * account card the page puts inside it. Full height and centred, on the plain
- * background the rest of the app uses — the logo carries the colour.
+ * The sign-in screen: the whole screen in the logo's own #577A88, the logo on
+ * it, the welcome line in white, and the form on a white card beneath — the
+ * same colour the goodbye screen fades out on, so arriving and leaving read as
+ * one pair.
  */
 export function WelcomeScreen({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-5 py-10">
+    <div
+      style={{ backgroundColor: BRAND_LOGO_COLOR }}
+      className="flex min-h-dvh flex-col items-center justify-center px-5 py-10"
+    >
       <div className="flex w-full max-w-sm flex-col items-center text-center">
-        <BrandLogo className="motion-safe:animate-[pbwSplashDrop_0.85s_cubic-bezier(0.34,1.3,0.64,1)_both]" />
+        {/* On its own colour the plate disappears and the mark stands alone. */}
+        <BrandLogo className="shadow-none motion-safe:animate-[pbwSplashDrop_0.85s_cubic-bezier(0.34,1.3,0.64,1)_both]" />
 
         <h1
           lang="my"
-          className="mt-7 font-myanmar text-[1.05rem] font-semibold leading-[1.9] text-foreground motion-safe:animate-[pbwSplashRise_0.5s_ease-out_0.35s_both]"
+          className="mt-6 font-myanmar text-[1.05rem] font-semibold leading-[1.9] text-white motion-safe:animate-[pbwSplashRise_0.5s_ease-out_0.35s_both]"
         >
           {WELCOME_MESSAGE}
         </h1>
 
-        <div className="mt-8 w-full text-left">{children}</div>
-
-        {footer}
+        <div className="mt-7 w-full rounded-3xl bg-card p-5 text-left text-card-foreground shadow-xl">
+          {children}
+          {footer ? <div className="flex justify-center">{footer}</div> : null}
+        </div>
       </div>
     </div>
   );

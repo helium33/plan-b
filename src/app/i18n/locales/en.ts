@@ -593,6 +593,8 @@ export const en = {
   /* ── The one-frame-per-screen catalogue ─────────────────────────────────── */
 
   swiper: {
+    addToCart: 'Add to cart',
+    added: '{{model}} {{colour}} added to the cart',
     carousel: 'frame viewer',
     label: 'Frames, one at a time — swipe up for the next',
     slide: 'frame',

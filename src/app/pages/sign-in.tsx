@@ -70,7 +70,7 @@ export function SignInPage() {
   const backLink = (
     <Link
       to={ROUTES.catalog}
-      className="mx-auto mt-8 inline-flex min-h-11 items-center justify-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="mx-auto mt-4 inline-flex min-h-11 items-center justify-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <ArrowLeft className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
       <span className="font-myanmar">{t('auth.backToCatalog')}</span>
