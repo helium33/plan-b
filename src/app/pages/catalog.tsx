@@ -6,7 +6,7 @@
  * a flick away (see `product-swiper.tsx`). It replaced a single-column feed,
  * which replaced a five-across grid — each step removing whatever competed
  * with the one question the catalogue is for, "do I like the look of this?".
- * Price, material and size live in the order sheet Buy opens.
+ * Price, material and size live in the order sheet Add to cart opens.
  *
  * ── New arrivals and best sellers ──────────────────────────────────────────
  * Badges on the slide rather than shelves of their own: a shelf of small cards
@@ -20,7 +20,7 @@
  *
  * ── Sizing ─────────────────────────────────────────────────────────────────
  * The swiper must fill exactly the space between the header and the bottom
- * bar, or a slide's Buy button ends up under the bar. `main` pads the bottom
+ * bar, or a slide's Add to cart button ends up under the bar. `main` pads the bottom
  * by 5rem on a phone (the bar) and 2rem on a desktop; the header is 3.5rem.
  * With a draft in progress, the running-total bar and the cart button float
  * above the tab bar too, so the swiper gives up that much more.
@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { FilterBar } from '@/app/components/catalog/filter-bar';
 import { ProductModal } from '@/app/components/catalog/product-modal';
 import { ProductSwiper } from '@/app/components/catalog/product-swiper';
-import { SeriesChips } from '@/app/components/catalog/series-chips';
+import { SeriesSelect } from '@/app/components/catalog/series-select';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
@@ -110,7 +110,7 @@ export function CatalogPage() {
     >
       <div className="z-10 shrink-0 border-b border-border bg-background/95 backdrop-blur-md">
         <FilterBar savedCount={favouriteIds.length} />
-        <SeriesChips frames={frames ?? []} />
+        <SeriesSelect frames={frames ?? []} />
       </div>
 
       <div className="min-h-0 flex-1">
@@ -182,7 +182,7 @@ export function CatalogPage() {
             <ProductSwiper
               frames={visible}
               newIds={newIds}
-              onBuy={(frame, colour) => setOpened({ frame, colour })}
+              onAdd={(frame, colour) => setOpened({ frame, colour })}
               className="h-full"
             />
 

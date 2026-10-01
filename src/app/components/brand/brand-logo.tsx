@@ -1,32 +1,42 @@
 /**
- * PLAN B VISION EYEWEARS — the full brand lockup.
+ * PLAN B VISION EYEWEARS — the brand lockup.
  *
- * Drawn in markup and SVG rather than shipped as an image, the same way the
- * POS draws it (`src/components/brand/BrandLogo.jsx` in helium33/visionary), so
- * both apps greet a person with the same mark: "PLAN" between two rules, the
- * glasses-B — two lens rings stacked on a spine — then "VISION" over a tracked
- * "EYEWEARS". White on the logo's own slate teal.
+ * The real mark, traced from the owner's logo artwork (see `brand-art.ts`):
+ * "PLAN" between two rules, the "B" drawn as a pair of sunglasses, "VISION"
+ * over a tracked "EYEWEARS", white on the logo's own slate teal. It replaced
+ * a lookalike set in a web font, which the owner rightly said was not their
+ * logo.
  *
  * The plate colour is fixed rather than themed. The theme's `--brand-600` is
  * within a shade of it and follows dark mode; the logo is a printed mark and
  * should look the same on every screen it appears on.
  *
  * `BrandLogo` is the lockup for full-screen moments — opening the app,
- * sign-in, sign-out. `BrandBadge` is the same mark cut down for a 32px bar:
- * the glasses-B on its plate, with "PLAN B" over "VISION" beside it.
+ * sign-in, sign-out. `BrandBadge` is the same plate cut down for a bar, and
+ * `GlassesMark` is the B on its own, for places with room for one letter.
  */
 import { cn } from '@/app/components/ui/utils';
 
-/** The logo's plate colour, exactly. */
-export const BRAND_LOGO_COLOR = '#577A88';
+import { B_MARK_PATH, B_MARK_VIEWBOX, LOGO_VIEWBOX, WORDMARK_PATH } from './brand-art';
 
-/** The "B": two lens rings on a vertical spine, tangent where the spine ends. */
+/** The logo's plate colour, sampled from the owner's artwork. */
+export const BRAND_LOGO_COLOR = '#568595';
+
+/** The words, the rules and the B, in `currentColor`. */
+export function LogoArt({ className }: { className?: string }) {
+  return (
+    <svg viewBox={LOGO_VIEWBOX} className={className} fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d={WORDMARK_PATH} />
+      <path fillRule="evenodd" d={B_MARK_PATH} />
+    </svg>
+  );
+}
+
+/** The sunglasses "B" on its own, in `currentColor`. */
 export function GlassesMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 34 56" className={className} fill="none" aria-hidden="true">
-      <rect x="3" y="3" width="5" height="50" rx="2.5" fill="currentColor" />
-      <circle cx="17" cy="15.5" r="12.5" stroke="currentColor" strokeWidth="4" />
-      <circle cx="17" cy="40.5" r="12.5" stroke="currentColor" strokeWidth="4" />
+    <svg viewBox={B_MARK_VIEWBOX} className={className} fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d={B_MARK_PATH} />
     </svg>
   );
 }
@@ -38,74 +48,38 @@ export function BrandLogo({ className }: { className?: string }) {
       aria-label="Plan B Vision Eyewears"
       style={{ backgroundColor: BRAND_LOGO_COLOR }}
       className={cn(
-        'inline-flex items-center gap-3 rounded-3xl px-6 py-4 text-white shadow-lg sm:gap-4 sm:px-8 sm:py-5',
+        'inline-flex items-center justify-center rounded-3xl px-7 py-6 text-white shadow-lg sm:px-9 sm:py-7',
         className,
       )}
     >
-      <div className="flex flex-col items-center gap-1.5">
-        <span className="h-px w-10 bg-white/70 sm:w-12" aria-hidden="true" />
-        <span className="text-xl font-extrabold tracking-wide sm:text-2xl">PLAN</span>
-        <span className="h-px w-10 bg-white/70 sm:w-12" aria-hidden="true" />
-      </div>
-
-      <GlassesMark className="h-12 w-7 shrink-0 sm:h-14 sm:w-8" />
-
-      <div className="flex flex-col items-start">
-        <span className="text-xl font-extrabold tracking-wide sm:text-2xl">VISION</span>
-        <span className="text-[0.6rem] font-semibold tracking-[0.3em] text-white/90">EYEWEARS</span>
-      </div>
+      <LogoArt className="h-[3.75rem] w-auto sm:h-[4.5rem]" />
     </div>
   );
 }
 
 /**
- * The compact lockup for headers, the sidebar and the voucher letterhead.
- *
- * `tone="light"` is for use on the logo colour itself (the voucher's
- * letterhead), where the words go white and the plate goes translucent.
+ * The compact lockup for headers and the sidebar: the same white mark on the
+ * same plate, sized for a bar. `markOnly` keeps just the B, for a square.
  */
 export function BrandBadge({
   className,
-  tone = 'default',
   markOnly = false,
 }: {
   className?: string;
-  tone?: 'default' | 'light';
   markOnly?: boolean;
 }) {
   return (
-    <span className={cn('flex min-w-0 items-center gap-2.5', className)}>
-      <span
-        style={tone === 'default' ? { backgroundColor: BRAND_LOGO_COLOR } : undefined}
-        className={cn(
-          'grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white shadow-sm',
-          tone === 'light' && 'bg-white/15',
-        )}
-      >
-        <GlassesMark className="h-6 w-4" />
-      </span>
-
-      {markOnly ? null : (
-        <span className="flex min-w-0 flex-col leading-none">
-          <span
-            className={cn(
-              'truncate text-[0.95rem] font-extrabold tracking-wide',
-              // The plate colour is too dark to read on the dark theme.
-              tone === 'light' ? 'text-white' : 'text-[#577A88] dark:text-white',
-            )}
-          >
-            PLAN B
-          </span>
-          <span
-            className={cn(
-              'mt-1 truncate text-[0.6rem] font-bold tracking-[0.28em]',
-              tone === 'light' ? 'text-white/75' : 'text-muted-foreground',
-            )}
-          >
-            VISION
-          </span>
-        </span>
+    <span
+      role="img"
+      aria-label="Plan B Vision Eyewears"
+      style={{ backgroundColor: BRAND_LOGO_COLOR }}
+      className={cn(
+        'inline-flex h-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm',
+        markOnly ? 'w-10' : 'px-2.5',
+        className,
       )}
+    >
+      {markOnly ? <GlassesMark className="h-7 w-auto" /> : <LogoArt className="h-7 w-auto" />}
     </span>
   );
 }

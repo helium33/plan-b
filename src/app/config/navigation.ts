@@ -31,7 +31,7 @@ export const ROUTES = {
    */
   goodbye: '/goodbye',
 
-  /** A shop's credit dashboard: limit, used, remaining, payment term, loyalty. */
+  /** A shop's credit dashboard: what is left to pay, by when, and every voucher. */
   credit: '/credit',
 
   /** Admin area. Index tab is the upload form; children are nested under it. */

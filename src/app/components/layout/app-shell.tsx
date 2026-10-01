@@ -42,9 +42,14 @@ const BASE_TABS = [
 
 const CREDIT_TAB = { to: ROUTES.credit, labelKey: 'nav.credit', icon: Wallet, end: false } as const;
 
-/** The Plan B Vision badge, for the header and the sidebar. */
+/** The Plan B Vision badge, for the header and the sidebar. The wrapper takes
+ *  the layout classes, so the plate keeps its own size inside it. */
 function Brand({ className }: { className?: string }) {
-  return <BrandBadge className={className} />;
+  return (
+    <span className={cn('flex min-w-0 items-center', className)}>
+      <BrandBadge />
+    </span>
+  );
 }
 
 export function AppShell() {

@@ -101,7 +101,7 @@ export const my: TranslationSchema = {
 
   onboarding: {
     title: 'Order တင်နည်း',
-    subtitle: 'အသံဖြင့် ရှင်းပြထားသော ဗီဒီယို — ၅၀ စက္ကန့်ခန့်။',
+    subtitle: 'အသံဖြင့် ရှင်းပြထားသော ဗီဒီယို — ၇၀ စက္ကန့်ခန့်။',
     start: 'Order စတင်မည်',
     next: 'ရှေ့သို့',
     skip: 'ကျော်မည် / Skip',
@@ -128,7 +128,9 @@ export const my: TranslationSchema = {
   /* ── ငါတို့ကိုင်း ────────────────────────────────────────────────────────── */
 
   catalog: {
-    seriesLabel: 'ကိုင်းအမည်များ',
+    seriesLabel: 'တံဆိပ်',
+    allSeries: 'တံဆိပ် အားလုံး ({{total}})',
+    clearSeries: 'တံဆိပ် အားလုံး ပြန်ပြရန်',
     all: 'အားလုံး',
     filterCategory: 'ဘယ်သူ့အတွက် · Who it is for',
     filterMaterial: 'ပစ္စည်း · Material',
@@ -175,11 +177,11 @@ export const my: TranslationSchema = {
     showing: 'စုစုပေါင်း {{total}} မျိုးအနက် {{shown}} မျိုး ပြသထားသည်',
 
     modelLabel: 'Model',
-    buyNow: 'ဝယ်ယူရန်',
     chooseColour: 'အရောင်ရွေးချယ်ရန်',
     selectColour: 'ရွေးမည်',
     unitPrice: 'ဈေးနှုန်း',
     doneAdding: 'ခြင်းတောင်း ကြည့်ရန်',
+    inCart: 'ခြင်းထဲတွင်',
     bestSellerBadge: 'Best Seller',
     includesCase: 'Case ပါဝင်သည်',
 
@@ -599,7 +601,6 @@ export const my: TranslationSchema = {
 
   swiper: {
     addToCart: 'ခြင်းထဲထည့်',
-    added: '{{model}} {{colour}} ကို ခြင်းထဲ ထည့်ပြီး',
     carousel: 'ကိုင်း ကြည့်ရှုရန်',
     label: 'ကိုင်းများ တစ်ခုချင်း — နောက်တစ်ခုအတွက် အပေါ်သို့ ပွတ်ပါ',
     slide: 'ကိုင်း',
@@ -614,8 +615,6 @@ export const my: TranslationSchema = {
   account: {
     title: 'အကြွေးစာရင်း',
     openDashboard: 'ကျွန်ုပ်၏ အကြွေးစာရင်း',
-    available: 'အကြွေးဖြင့် ထပ်မှာယူနိုင်သည့် ပမာဏ',
-    noLimit: 'ကန့်သတ်ငွေ မသတ်မှတ်ရသေး',
     loadFailed: 'စာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ကို စစ်ပြီး ထပ်ကြိုးစားပါ။',
     missing: 'ဤဆိုင်ကို ရှာမတွေ့ပါ။ သင့်အကောင့်ကို စစ်ပေးရန် ရုံးသို့ ပြောပါ။',
     noAccountTitle: 'ဤအကောင့်တွင် အကြွေးစာရင်း မရှိပါ',
@@ -632,57 +631,52 @@ export const my: TranslationSchema = {
       'ရုံးမှ ဤအကောင့်ကို ခေတ္တရပ်ဆိုင်းထားပါသည်။ အကြွေးမှာယူမှုအသစ်များ ရပ်ထားပါသည် — ရုံးသို့ ဆက်သွယ်ပါ။',
     lockedOverdue:
       '{{amount}} သည် 14 ရက် သက်တမ်း ကျော်လွန်နေပါသည်။ ပေးချေပြီးသည်နှင့် အကြွေးမှာယူမှု ပြန်ဖွင့်ပါမည်။',
-    reminderSoon_one: 'ငွေပေးချေရန် {{count}} ရက်သာ လိုပါတော့သည် — {{amount}}',
-    reminderSoon_other: 'ငွေပေးချေရန် {{count}} ရက်သာ လိုပါတော့သည် — {{amount}}',
-    reminderToday: 'ယနေ့ ပေးချေရမည် — {{amount}}',
-    reminderOverdue_one: '{{amount}} သည် {{count}} ရက် ကျော်လွန်နေပါပြီ',
-    reminderOverdue_other: '{{amount}} သည် {{count}} ရက် ကျော်လွန်နေပါပြီ',
 
-    limit: 'လစဉ် အကြွေးခွင့်ပြုငွေ',
-    usedCredit: 'သုံးပြီး အကြွေး',
-    remaining: 'ကျန်ရှိ လက်ကျန်',
-
-    used: {
-      title: 'အကြွေးသုံးစွဲမှု',
-      caption: 'ခွင့်ပြုငွေမှ သုံးပြီး',
-      label: 'အကြွေးခွင့်ပြုငွေ၏ {{pct}}% သုံးပြီး',
+    card: {
+      title: 'ပေးရန် အကြွေး',
+      leftToPay: 'ပေးရန် ကျန်ငွေ',
+      paid: 'ပေးပြီးငွေ',
+      lastDay: 'နောက်ဆုံး ပေးရမည့်ရက်',
+      forVoucher: 'ဘောက်ချာ {{voucherNo}}',
+      forVouchers: 'မပေးရသေးသော ဘောက်ချာ {{count}} စောင်',
+      nothingOwed: 'ပေးရန် မရှိပါ',
+      canOrder: 'အကြွေးဖြင့် မှာယူနိုင်ပါသည်။',
+      daysLeft_one: '{{count}} ရက် ကျန်',
+      daysLeft_other: '{{count}} ရက် ကျန်',
+      dueToday: 'ယနေ့ ပေးရမည်',
+      daysLate_one: '{{count}} ရက် နောက်ကျ',
+      daysLate_other: '{{count}} ရက် နောက်ကျ',
+      rule: 'ဘောက်ချာတိုင်းကို 14 ရက်အတွင်း ပေးချေပါ။ ယခင်ဘောက်ချာကို အပြည့်ပေးချေပြီးမှ အကြွေးဖြင့် ထပ်မှာယူနိုင်ပါမည်။',
     },
 
-    term: {
-      title: 'နောက်ပေးချေရန်',
-      nothingOwed: 'ပေးရန် မရှိ',
-      overdueCaption_one: 'ရက် ကျော်လွန်',
-      overdueCaption_other: 'ရက် ကျော်လွန်',
-      dueToday: 'ယနေ့ ပေးရန်',
-      daysLeftCaption_one: 'ရက် ကျန်',
-      daysLeftCaption_other: 'ရက် ကျန်',
-      label: 'ပေးချေရန် {{term}} ရက်အနက် {{elapsed}} ရက် ကုန်ဆုံးပြီ',
-      dueDate: 'ပေးရမည့်ရက်',
-      amount: 'ပမာဏ',
-      voucher: 'ဘောက်ချာ',
-    },
-
-    loyalty: {
-      title: 'အချိန်မှန် ပေးချေမှု',
-      caption: 'အချိန်မှန်',
-      label: 'မကြာသေးမီ ဘောက်ချာများ၏ {{pct}}% ကို အချိန်မှန် ပေးချေပြီး',
-      noHistory: 'ပထမဆုံး ဘောက်ချာကို 14 ရက်အတွင်း ပေးချေပြီး အမှတ် စတင်ပါ။',
-      summary: 'မကြာသေးမီ ဘောက်ချာ {{considered}} စောင်အနက် {{onTime}} စောင် အချိန်မှန်',
-      couponReady: 'နောက်အော်ဒါတွင် {{pct}}% လျှော့',
-      couponSpent: 'ကူပွန် သုံးပြီးပါပြီ။ နောက်ဘောက်ချာကို အချိန်မှန်ပေးပါက {{pct}}% ထပ်ရပါမည်။',
-      howToEarn:
-        'ဘောက်ချာတိုင်းကို 14 ရက်အတွင်း ပေးချေပါ — နောက်ဆုံး {{window}} စောင်လုံး အချိန်မှန်ဖြစ်ပါက နောက်အော်ဒါတွင် {{pct}}% လျှော့ပေးပါမည်။',
-    },
-
-    open: {
-      title: 'မပေးရသေးသော ဘောက်ချာများ',
-      empty: 'ယခု ပေးရန် မရှိပါ။',
-      voucher: 'ဘောက်ချာ',
-      issued: 'ထုတ်သည့်ရက်',
-      due: 'ပေးရမည့်ရက်',
-      balance: 'ကျန်ငွေ',
-      overdueBy_one: '{{count}} ရက် နောက်ကျ',
-      overdueBy_other: '{{count}} ရက် နောက်ကျ',
+    vouchers: {
+      title: 'ဘောက်ချာများ',
+      empty: 'ဘောက်ချာ မရှိသေးပါ။',
+      paid: 'ပေးပြီး',
+      toPay: '{{amount}} ပေးရန်',
+      late: 'နောက်ကျ',
+      cancelled: 'ပယ်ဖျက်ပြီး',
+      pieces_one: '{{count}} လုံး',
+      pieces_other: '{{count}} လုံး',
+      openDetail: 'ဘောက်ချာ {{voucherNo}} ကို ကြည့်ရန်',
+      detail: {
+        issued: 'ရက်စွဲ',
+        due: 'ပေးရမည့်ရက်',
+        status: 'အခြေအနေ',
+        item: 'ပစ္စည်း',
+        qty: 'အရေအတွက်',
+        amount: 'ပမာဏ',
+        subtotal: 'စုစုပေါင်း',
+        discount: 'လျှော့ငွေ',
+        total: 'ကျသင့်ငွေ',
+        paid: 'ပေးပြီးငွေ',
+        returned: 'ပြန်အပ်ပစ္စည်း ခုနှိမ်ငွေ',
+        balance: 'ပေးရန် ကျန်ငွေ',
+        close: 'ပိတ်ရန်',
+        fromWeb: 'အွန်လိုင်းမှ မှာယူ',
+        fromOffice: 'ရုံးမှ ထုတ်ပေး',
+        noItems: 'ဤဘောက်ချာတွင် ပစ္စည်းအသေးစိတ် မပါပါ။',
+      },
     },
 
     picker: {
@@ -698,8 +692,6 @@ export const my: TranslationSchema = {
       title: 'အကြွေးဖြင့် မှာယူရန်',
       chooseShopFirst: 'ဤအော်ဒါသည် မည်သည့်ဆိုင်အတွက်လဲ ရွေးပါ။',
       chooseShopAction: 'ဆိုင်ရွေးရန်',
-      subtotal: 'စုစုပေါင်း',
-      coupon: 'အချိန်မှန် ကူပွန် ({{pct}}%)',
       total: 'အကြွေးစုစုပေါင်း',
       availableAfter: 'ဤအော်ဒါပြီးနောက် ကျန်အကြွေး',
       dueBy: 'ပေးချေရမည့်ရက်',
@@ -720,6 +712,8 @@ export const my: TranslationSchema = {
         OUT_OF_STOCK: 'လက်ကျန် မလုံလောက်ပါ — {{lines}} (ရှိ / မှာ)',
         MANUAL_HOLD: 'ဤအကောင့်ကို ခေတ္တရပ်ဆိုင်းထားပါသည်။ ရုံးသို့ ဆက်သွယ်ပါ။',
         OVERDUE_LOCK: 'ဘောက်ချာတစ်စောင် 14 ရက် ကျော်လွန်နေပါသည်။ ပေးချေပြီးမှ အကြွေးဖြင့် ထပ်မှာနိုင်ပါမည်။',
+        UNPAID_PREVIOUS:
+          'ဘောက်ချာ {{voucherNo}} တွင် {{amount}} ပေးရန် ကျန်ပါသေးသည်။ ၎င်းကို အပြည့်ပေးချေပြီးမှ အကြွေးဖြင့် ထပ်မှာယူနိုင်ပါမည်။',
         OVER_LIMIT: 'ဤအော်ဒါဖြင့် လက်ကျန် {{projected}} ဖြစ်ပြီး ခွင့်ပြုငွေ {{limit}} ကို ကျော်ပါမည်။',
         READ_FAILED: 'လက်ကျန်နှင့် အကြွေးကို စစ်မရပါ။ အင်တာနက်စစ်ပြီး ထပ်ကြိုးစားပါ။',
         WRITE_FAILED:

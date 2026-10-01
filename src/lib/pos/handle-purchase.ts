@@ -55,12 +55,6 @@ import {
 } from '@/lib/pos/catalog-link';
 import { canPurchase, computeDueDate, evaluateShopCredit, type PurchaseDenial } from '@/lib/pos/credit';
 import {
-  LOYALTY_DISCOUNT_PCT,
-  LOYALTY_DISCOUNT_REASON,
-  evaluateLoyalty,
-  loyaltyDiscount,
-} from '@/lib/pos/loyalty';
-import {
   MAIN_LOCATION,
   POS,
   WEB_CHANNEL,
@@ -103,7 +97,15 @@ export type PurchaseFailure =
       code: 'OUT_OF_STOCK';
       shortages: { modelNo: string; colorCode: string; requested: number; available: number }[];
     }
-  | { ok: false; code: PurchaseDenial; projected?: number; limit?: number; days?: number }
+  | {
+      ok: false;
+      code: PurchaseDenial;
+      projected?: number;
+      limit?: number;
+      days?: number;
+      voucherNo?: string;
+      amount?: number;
+    }
   | { ok: false; code: 'READ_FAILED' | 'WRITE_FAILED'; cause: unknown };
 
 export type PurchaseSuccess = {
@@ -112,8 +114,6 @@ export type PurchaseSuccess = {
   voucherNo: string;
   pieces: number;
   subtotal: number;
-  /** The loyalty coupon, when it applied. Zero otherwise. */
-  discount: number;
   grandTotal: number;
   dueDate: Date;
 };
@@ -174,7 +174,7 @@ async function purchase(input: PurchaseInput): Promise<PurchaseResult> {
     }));
   if (shortages.length > 0) return { ok: false, code: 'OUT_OF_STOCK', shortages };
 
-  /* ── 2. The shop, its account, and its loyalty ──────────────────────── */
+  /* ── 2. The shop and its account ─────────────────────────────────────── */
 
   const shop = await getShop(shopId);
   if (!shop) return { ok: false, code: 'SHOP_NOT_FOUND' };
@@ -182,11 +182,11 @@ async function purchase(input: PurchaseInput): Promise<PurchaseResult> {
 
   const vouchers = await listShopVouchers(shopId, { uid: actor.uid, role: actor.role });
   const credit = evaluateShopCredit(shop, vouchers, now);
-  const loyalty = evaluateLoyalty(vouchers, now);
 
+  // No discount on a web order: the on-time 2% coupon was withdrawn, and the
+  // rules now refuse any voucher from a shop that carries one.
   const subtotal = lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
-  const discount = loyalty.couponAvailable ? loyaltyDiscount(subtotal) : 0;
-  const grandTotal = subtotal - discount;
+  const grandTotal = subtotal;
   const pieces = lines.reduce((sum, line) => sum + line.qty, 0);
 
   const gate = canPurchase(credit, grandTotal);
@@ -235,10 +235,9 @@ async function purchase(input: PurchaseInput): Promise<PurchaseResult> {
     })),
 
     subtotal,
-    discount,
-    discountReason: discount > 0 ? LOYALTY_DISCOUNT_REASON : null,
+    discount: 0,
+    discountReason: null,
     grandTotal,
-    loyalty: discount > 0 ? { pct: LOYALTY_DISCOUNT_PCT, scorePct: loyalty.scorePct } : null,
 
     paidAmount: 0,
     paymentAtIssue: 0,
@@ -364,7 +363,7 @@ async function purchase(input: PurchaseInput): Promise<PurchaseResult> {
     entity: POS.vouchers,
     entityId: voucherRef.id,
     before: null,
-    after: { voucherNo, grandTotal, discount, shopId: shop.id, channel: WEB_CHANNEL },
+    after: { voucherNo, grandTotal, shopId: shop.id, channel: WEB_CHANNEL },
     reason: null,
     at: serverTimestamp(),
     clientAt,
@@ -384,7 +383,6 @@ async function purchase(input: PurchaseInput): Promise<PurchaseResult> {
     voucherNo,
     pieces,
     subtotal,
-    discount,
     grandTotal,
     dueDate,
   };

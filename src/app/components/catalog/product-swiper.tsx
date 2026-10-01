@@ -14,13 +14,14 @@
  * watches which slide is showing, for the counter and the keyboard.
  *
  * ── The image, then the controls ──────────────────────────────────────────
- * The photograph fills the top of the screen with only the wishlist heart and
- * the counter in its corner. Everything you press sits below it, never on it:
+ * The photograph fills the top of the screen edge to edge, with only the
+ * badges, the counter and the wishlist heart floating in its corners; a tap on
+ * it opens the photo full screen. Everything else you press sits below it:
  * the model number, the colour swatches (a swatch changes the photograph to
- * that colour), and two buttons — Add to Cart puts one piece of the chosen
- * colour in the cart, Buy opens the order sheet on that colour to set
- * quantities. Signed out, the two buttons become "Sign in to shop", in the
- * same place: the screen does not change shape, only where the button goes.
+ * that colour), and one button — Add to cart, which opens the order sheet on
+ * that colour, where each tap on a colour puts a piece in the cart. Signed
+ * out, the button becomes "Sign in to shop", in the same place: the screen
+ * does not change shape, only where the button goes.
  *
  * ── Images ─────────────────────────────────────────────────────────────────
  * Only slides within a few of the one showing render their photo. A catalogue
@@ -29,12 +30,12 @@
  */
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ShoppingBag, ShoppingCart, Sparkles, Star } from 'lucide-react';
+import { ChevronDown, ChevronUp, ShoppingCart, Sparkles, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { FavouriteButton } from '@/app/components/catalog/frame-chrome';
 import { FrameImage } from '@/app/components/catalog/frame-image';
+import { ImageZoom, type ZoomSubject } from '@/app/components/catalog/image-zoom';
 import { cn } from '@/app/components/ui/utils';
 import { ROUTES } from '@/app/config/navigation';
 import { useAuth } from '@/app/hooks/use-auth';
@@ -58,10 +59,11 @@ type SlideProps = {
   total: number;
   isNew: boolean;
   near: boolean;
-  onBuy: (frame: FrameDoc, cNumber: string | null) => void;
+  onAdd: (frame: FrameDoc, cNumber: string | null) => void;
+  onZoom: (subject: ZoomSubject) => void;
 };
 
-function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
+function Slide({ frame, index, total, isNew, near, onAdd, onZoom }: SlideProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
 
@@ -76,17 +78,11 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
     return line ? Object.values(line).reduce((sum, qty) => sum + qty, 0) : 0;
   });
 
-  const adjustQty = useOrderStore((state) => state.adjustQty);
-
   const name = frameDisplayName(frame);
   const image = shown?.images[0] ?? primaryImage(frame);
+  const photos = shown?.images.length ? shown.images : image ? [image] : [];
   const extra = variants.length - MAX_SWATCHES;
-
-  const addOne = () => {
-    if (!shown) return;
-    adjustQty(frame.id, shown.cNumber, 1);
-    toast.success(t('swiper.added', { model: frame.frameCode, colour: shown.cNumber }));
-  };
+  const alt = shown ? `${name} — ${shown.cNumber} ${shown.colorName}` : name;
 
   return (
     <article
@@ -94,15 +90,25 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
       aria-label={t('swiper.position', { current: index + 1, total, name })}
       className="flex h-full w-full flex-col overflow-hidden bg-white"
     >
-      {/* ── The one image, with the wishlist heart in its corner ──────────── */}
+      {/* ── The one image, edge to edge; a tap opens it full screen ───────── */}
       <div className="relative min-h-0 flex-1">
-        {near ? (
-          <FrameImage
-            src={image}
-            alt={shown ? `${name} — ${shown.cNumber} ${shown.colorName}` : name}
-            eager
-            className="h-full w-full object-contain px-4 pb-2 pt-14"
-          />
+        {near && photos.length > 0 ? (
+          <button
+            type="button"
+            onClick={() =>
+              onZoom({
+                images: photos,
+                label: alt,
+                caption: shown ? `${shown.cNumber} · ${shown.colorName}` : frame.frameCode,
+              })
+            }
+            aria-label={t('catalog.zoom', { name: alt })}
+            className="block h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <FrameImage src={image} alt={alt} eager className="h-full w-full object-contain p-1" />
+          </button>
+        ) : near ? (
+          <FrameImage src={image} alt={alt} eager className="h-full w-full object-contain p-1" />
         ) : (
           <div className="h-full w-full" aria-hidden="true" />
         )}
@@ -135,7 +141,7 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
         </div>
       </div>
 
-      {/* ── Below the image: model, colour, Add to Cart, Buy ─────────────── */}
+      {/* ── Below the image: model, colour, Add to cart ──────────────────── */}
       <div className="shrink-0 border-t border-border bg-background px-4 pb-3 pt-3">
         <div className="mx-auto max-w-xl">
           {frame.brand.trim() ? (
@@ -192,28 +198,22 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
           ) : null}
 
           {isSignedIn ? (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={addOne}
-                disabled={!shown}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-3 text-[0.95rem] font-bold text-primary transition-colors hover:bg-primary/5 active:scale-[0.99] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <ShoppingCart className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
-                <span className="truncate font-myanmar">{t('swiper.addToCart')}</span>
-                {pieces > 0 ? (
-                  <span className="rounded-full bg-primary/15 px-2 text-sm tabular-nums">{pieces}</span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                onClick={() => onBuy(frame, shown?.cNumber ?? null)}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-[0.95rem] font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <ShoppingBag className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
-                <span className="truncate font-myanmar">{t('catalog.buyNow')}</span>
-              </button>
-            </div>
+            // One button. It opens the order sheet on the colour showing, and
+            // the sheet is where pieces go into the cart — one per tap on a
+            // colour, with the whole selection summed up at its foot.
+            <button
+              type="button"
+              onClick={() => onAdd(frame, shown?.cNumber ?? null)}
+              className="mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-base font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <ShoppingCart className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+              <span className="truncate font-myanmar">{t('swiper.addToCart')}</span>
+              {pieces > 0 ? (
+                <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-sm tabular-nums">
+                  <span className="font-myanmar">{t('catalog.pieces', { count: pieces })}</span>
+                </span>
+              ) : null}
+            </button>
           ) : (
             <Link
               to={ROUTES.signIn}
@@ -231,18 +231,21 @@ function Slide({ frame, index, total, isNew, near, onBuy }: SlideProps) {
 export function ProductSwiper({
   frames,
   newIds,
-  onBuy,
+  onAdd,
   className,
 }: {
   frames: readonly FrameDoc[];
   /** Frames to badge as new arrivals — decided by the catalogue, not here. */
   newIds: ReadonlySet<string>;
-  onBuy: (frame: FrameDoc, cNumber: string | null) => void;
+  /** Opens the order sheet for a model, on the colour the buyer was looking at. */
+  onAdd: (frame: FrameDoc, cNumber: string | null) => void;
   className?: string;
 }) {
   const { t } = useTranslation();
   const scroller = useRef<HTMLDivElement>(null);
   const [current, setCurrent] = useState(0);
+  // One full-screen viewer for the whole swiper, not one per slide.
+  const [zoom, setZoom] = useState<ZoomSubject | null>(null);
 
   // The list's identity, by content. The array itself is rebuilt whenever the
   // catalogue re-filters — including when a heart is tapped — and resetting on
@@ -319,7 +322,8 @@ export function ProductSwiper({
               total={frames.length}
               isNew={newIds.has(frame.id)}
               near={Math.abs(index - current) <= RENDER_WINDOW}
-              onBuy={onBuy}
+              onAdd={onAdd}
+              onZoom={setZoom}
             />
           </div>
         ))}
@@ -359,6 +363,8 @@ export function ProductSwiper({
           </span>
         </p>
       ) : null}
+
+      <ImageZoom subject={zoom} onClose={() => setZoom(null)} />
     </div>
   );
 }

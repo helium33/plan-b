@@ -101,7 +101,7 @@ export const en = {
 
   onboarding: {
     title: 'How to order',
-    subtitle: 'A spoken guide in Burmese, about 50 seconds.',
+    subtitle: 'A spoken guide in Burmese, about 70 seconds.',
     start: 'Start ordering',
     next: 'Next',
     /** Both languages, deliberately — this is the escape hatch. */
@@ -129,7 +129,9 @@ export const en = {
   /* ── Catalogue ───────────────────────────────────────────────────────────── */
 
   catalog: {
-    seriesLabel: 'Frame names',
+    seriesLabel: 'Brand',
+    allSeries: 'All brands ({{total}})',
+    clearSeries: 'Show all brands',
     all: 'All · အားလုံး',
     filterCategory: 'Who it is for · ဘယ်သူ့အတွက်',
     filterMaterial: 'Material · ပစ္စည်း',
@@ -176,11 +178,11 @@ export const en = {
     showing: 'Showing {{shown}} of {{total}} models',
 
     modelLabel: 'Model',
-    buyNow: 'Buy now',
     chooseColour: 'Choose a colour',
     selectColour: 'Select',
     unitPrice: 'Price',
     doneAdding: 'View the cart',
+    inCart: 'In the cart',
     bestSellerBadge: 'Best seller',
     includesCase: 'Includes case',
 
@@ -609,7 +611,6 @@ export const en = {
 
   swiper: {
     addToCart: 'Add to cart',
-    added: '{{model}} {{colour}} added to the cart',
     carousel: 'frame viewer',
     label: 'Frames, one at a time — swipe up for the next',
     slide: 'frame',
@@ -626,8 +627,6 @@ export const en = {
   account: {
     title: 'Credit account · အကြွေးစာရင်း',
     openDashboard: 'My credit account',
-    available: 'Available to order on credit',
-    noLimit: 'No limit set',
     loadFailed: 'Could not load this account. Check your connection and try again.',
     missing: 'This shop could not be found. Ask the office to check your account.',
     noAccountTitle: 'No credit account on this login',
@@ -644,57 +643,52 @@ export const en = {
       'The office has put this account on hold. New credit orders are paused — please contact the office.',
     lockedOverdue:
       '{{amount}} is past the 14-day term. Credit orders resume as soon as it is paid.',
-    reminderSoon_one: 'Payment due in {{count}} day: {{amount}}',
-    reminderSoon_other: 'Payment due in {{count}} days: {{amount}}',
-    reminderToday: 'Payment due today: {{amount}}',
-    reminderOverdue_one: '{{amount}} is {{count}} day overdue',
-    reminderOverdue_other: '{{amount}} is {{count}} days overdue',
 
-    limit: 'Monthly credit limit',
-    usedCredit: 'Used credit',
-    remaining: 'Remaining balance',
-
-    used: {
-      title: 'Credit used',
-      caption: 'of limit used',
-      label: '{{pct}}% of the credit limit used',
+    card: {
+      title: 'What you owe',
+      leftToPay: 'Left to pay',
+      paid: 'Paid so far',
+      lastDay: 'Last day to pay',
+      forVoucher: 'Voucher {{voucherNo}}',
+      forVouchers: '{{count}} unpaid vouchers',
+      nothingOwed: 'Nothing to pay',
+      canOrder: 'You can order on credit.',
+      daysLeft_one: '{{count}} day left',
+      daysLeft_other: '{{count}} days left',
+      dueToday: 'Due today',
+      daysLate_one: '{{count}} day late',
+      daysLate_other: '{{count}} days late',
+      rule: 'Pay each voucher within 14 days. You can order on credit again once the last voucher is paid in full.',
     },
 
-    term: {
-      title: 'Next payment',
-      nothingOwed: 'Nothing owed',
-      overdueCaption_one: 'day overdue',
-      overdueCaption_other: 'days overdue',
-      dueToday: 'due today',
-      daysLeftCaption_one: 'day left',
-      daysLeftCaption_other: 'days left',
-      label: '{{elapsed}} of {{term}} days of the payment term used',
-      dueDate: 'Due date',
-      amount: 'Amount',
-      voucher: 'Voucher',
-    },
-
-    loyalty: {
-      title: 'On-time payments',
-      caption: 'on time',
-      label: '{{pct}}% of recent bills paid on time',
-      noHistory: 'Pay your first bill within 14 days to start your score.',
-      summary: '{{onTime}} of {{considered}} recent bills paid on time',
-      couponReady: '{{pct}}% off your next order',
-      couponSpent: 'Coupon used. Pay your next bill on time to earn another {{pct}}% off.',
-      howToEarn:
-        'Pay every bill within 14 days — your last {{window}} all on time — and your next order gets {{pct}}% off.',
-    },
-
-    open: {
-      title: 'Open vouchers',
-      empty: 'Nothing owed right now.',
-      voucher: 'Voucher',
-      issued: 'Issued',
-      due: 'Due',
-      balance: 'Balance',
-      overdueBy_one: '{{count}} day late',
-      overdueBy_other: '{{count}} days late',
+    vouchers: {
+      title: 'Your vouchers',
+      empty: 'No vouchers yet.',
+      paid: 'Paid',
+      toPay: '{{amount}} to pay',
+      late: 'Late',
+      cancelled: 'Cancelled',
+      pieces_one: '{{count}} pc',
+      pieces_other: '{{count}} pcs',
+      openDetail: 'Open voucher {{voucherNo}}',
+      detail: {
+        issued: 'Date',
+        due: 'Pay by',
+        status: 'Status',
+        item: 'Item',
+        qty: 'Qty',
+        amount: 'Amount',
+        subtotal: 'Subtotal',
+        discount: 'Discount',
+        total: 'Total',
+        paid: 'Paid',
+        returned: 'Credited for returns',
+        balance: 'Left to pay',
+        close: 'Close',
+        fromWeb: 'Ordered online',
+        fromOffice: 'From the office',
+        noItems: 'No item details on this voucher.',
+      },
     },
 
     picker: {
@@ -710,8 +704,6 @@ export const en = {
       title: 'Order on credit · အကြွေးဖြင့် မှာယူရန်',
       chooseShopFirst: 'Choose which shop this order is for.',
       chooseShopAction: 'Choose a shop',
-      subtotal: 'Subtotal',
-      coupon: 'On-time coupon ({{pct}}%)',
       total: 'Total on credit',
       availableAfter: 'Credit left after this order',
       dueBy: 'Pay by',
@@ -732,6 +724,8 @@ export const en = {
         OUT_OF_STOCK: 'Not enough stock: {{lines}} (in stock / asked).',
         MANUAL_HOLD: 'This account is on hold. Contact the office.',
         OVERDUE_LOCK: 'A bill is past the 14-day term. Pay it to order on credit again.',
+        UNPAID_PREVIOUS:
+          'Voucher {{voucherNo}} still has {{amount}} to pay. Pay it in full first, then you can order on credit again.',
         OVER_LIMIT: 'This order would take the balance to {{projected}}, over the {{limit}} limit.',
         READ_FAILED: 'Could not check stock and credit. Check your connection and try again.',
         WRITE_FAILED:

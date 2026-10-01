@@ -5,15 +5,14 @@
  * order a rep places for the shop, lands on the dashboard while it is open —
  * which is the point of the two apps sharing one database.
  *
- * Credit and loyalty are derived here, on every snapshot, with the same pure
- * functions `handlePurchase` uses to decide whether an order goes through. The
- * dashboard therefore cannot show "available" a figure the checkout refuses.
+ * Credit is derived here, on every snapshot, with the same pure function
+ * `handlePurchase` uses to decide whether an order goes through. The dashboard
+ * therefore cannot show "available" a figure the checkout refuses.
  */
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '@/app/stores/auth-store';
 import { evaluateShopCredit, type ShopCreditState } from '@/lib/pos/credit';
-import { evaluateLoyalty, type LoyaltyState } from '@/lib/pos/loyalty';
 import type { PosShop, PosVoucher } from '@/lib/pos/schema';
 import { subscribeShop, subscribeShopVouchers } from '@/lib/pos/shop-data';
 import type { AppRole } from '@/lib/rbac';
@@ -25,7 +24,6 @@ export type UseShopCredit =
       shop: PosShop;
       vouchers: PosVoucher[];
       credit: ShopCreditState;
-      loyalty: LoyaltyState;
     };
 
 export function useShopCredit(shopId: string | null, role: AppRole | null): UseShopCredit {
@@ -66,7 +64,6 @@ export function useShopCredit(shopId: string | null, role: AppRole | null): UseS
       shop,
       vouchers,
       credit: evaluateShopCredit(shop, vouchers, today),
-      loyalty: evaluateLoyalty(vouchers, today),
     };
   }, [shopId, uid, role, failed, shop, vouchers]);
 }

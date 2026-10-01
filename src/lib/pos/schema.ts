@@ -153,6 +153,8 @@ export type PosVoucher = {
   grandTotal: number;
   paidAmount: number;
   paymentAtIssue: number;
+  /** Taken off this voucher by credit notes — goods that came back. */
+  creditedAmount: number;
   balanceDue: number;
   /** `productId|colorCode` → pieces already returned against this voucher. */
   returnedQty: Record<string, number>;
@@ -239,6 +241,7 @@ export function normalizeVoucher(id: string, data: Record<string, unknown>): Pos
     grandTotal: asNumber(data.grandTotal),
     paidAmount: asNumber(data.paidAmount),
     paymentAtIssue: asNumber(data.paymentAtIssue),
+    creditedAmount: asNumber(data.creditedAmount),
     balanceDue: asNumber(data.balanceDue),
     returnedQty: Object.fromEntries(
       Object.entries(returned).map(([key, value]) => [key, asNumber(value)]),

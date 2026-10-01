@@ -84,18 +84,6 @@
   --sidebar-accent-foreground: oklch(0.279 0.019 262.9);
   --sidebar-border: oklch(0.928 0.006 264.5);
   --sidebar-ring: var(--brand-600);
-
-  /* Credit meters. The fill carries severity; each track is a lighter step of
-     its own fill's ramp, so a ring's state reads across the whole circle.
-     Warning and critical are fixed status colours, not themed — and never
-     shown alone: every ring prints its figure and a labelled state beside it
-     (amber on white is under 3:1 by design; the label is the mitigation). */
-  --meter-ok: var(--brand-600);
-  --meter-ok-track: var(--brand-100);
-  --meter-warn: #fab219;
-  --meter-warn-track: #fdefcf;
-  --meter-crit: #d03b3b;
-  --meter-crit-track: #f7dada;
 }
 
 .dark {
@@ -143,11 +131,6 @@
   --sidebar-accent-foreground: oklch(0.971 0.003 220.4);
   --sidebar-border: oklch(0.303 0.018 220.4);
   --sidebar-ring: var(--brand-400);
-
-  --meter-ok: var(--brand-400);
-  --meter-ok-track: var(--brand-900);
-  --meter-warn-track: #45381a;
-  --meter-crit-track: #4b2324;
 }
 
 @theme inline {

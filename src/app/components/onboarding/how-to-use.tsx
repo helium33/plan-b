@@ -2,9 +2,11 @@
  * The "How to order" video, shown on launch until dismissed for good.
  *
  * A narrated clip of the real app — a native Burmese woman's voice walking through
- * sign-in, swiping, choosing a colour, ordering, credit and the on-time
- * discount, with each step captioned on screen. It replaced three animated
- * cartoon scenes, which showed an app that did not quite look like this one.
+ * opening it, signing in, swiping and enlarging a photo, choosing a brand,
+ * adding colours to the cart, ordering on credit or over Telegram / Viber, and
+ * the credit page, each step numbered and captioned above the phone screen. It
+ * replaced three animated cartoon scenes, which showed an app that did not
+ * quite look like this one.
  * The clip is `public/how-to.mp4`; `VITE_ONBOARDING_VIDEO_URL` swaps in
  * another without a code change.
  *

@@ -12,15 +12,16 @@
  * scrolling a voucher is not a button that should move money.
  *
  * ── The preview is a preview ───────────────────────────────────────────────
- * The figures here — available credit, the loyalty coupon, the due date — are
- * derived live from the same rules `handlePurchase` applies, so they agree.
+ * The figures here — available credit, the due date, whether an earlier bill
+ * still has to be paid first — are derived live from the same rules
+ * `handlePurchase` applies, so they agree.
  * But `handlePurchase` re-reads stock and credit at the moment of ordering,
  * and the database's rules check again as it commits; whatever it answers is
  * the truth, and its answer is what the buyer is shown.
  */
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CreditCard, Gift, Loader2, Store } from 'lucide-react';
+import { CreditCard, Loader2, Store } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -34,7 +35,6 @@ import { useOrderStore } from '@/app/stores/order-store';
 import { formatKyat } from '@/lib/format';
 import { canPurchase, computeDueDate } from '@/lib/pos/credit';
 import { handlePurchase, type PurchaseFailure } from '@/lib/pos/handle-purchase';
-import { LOYALTY_DISCOUNT_PCT, loyaltyDiscount } from '@/lib/pos/loyalty';
 import type { OrderTotals } from '@/lib/wholesale';
 
 function failureMessage(t: TFunction, failure: PurchaseFailure): string {
@@ -49,6 +49,11 @@ function failureMessage(t: TFunction, failure: PurchaseFailure): string {
           .map((s) => `${s.modelNo} ${s.colorCode} (${s.available}/${s.requested})`)
           .join(', '),
       });
+    case 'UNPAID_PREVIOUS':
+      return t('account.checkout.errors.UNPAID_PREVIOUS', {
+        voucherNo: failure.voucherNo ?? '—',
+        amount: formatKyat(failure.amount ?? 0),
+      });
     case 'OVER_LIMIT':
       return t('account.checkout.errors.OVER_LIMIT', {
         projected: formatKyat(failure.projected ?? 0),
@@ -59,8 +64,21 @@ function failureMessage(t: TFunction, failure: PurchaseFailure): string {
   }
 }
 
+/**
+ * The due date in the reader's own calendar. `toISOString()` would print the
+ * UTC date, which in Yangon (UTC+6:30) is the day before a midnight due date.
+ */
+function formatDay(date: Date, language: string): string {
+  return new Intl.DateTimeFormat(language === 'my' ? 'my-MM' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    numberingSystem: 'latn',
+  }).format(date);
+}
+
 export function CreditCheckout({ totals, note }: { totals: OrderTotals; note?: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
   const user = useAuthStore((s) => s.user);
@@ -90,9 +108,7 @@ export function CreditCheckout({ totals, note }: { totals: OrderTotals; note?: s
   }
 
   const loaded = account.status === 'ready' ? account : null;
-  const subtotal = totals.subtotalKyat;
-  const discount = loaded?.loyalty.couponAvailable ? loyaltyDiscount(subtotal) : 0;
-  const total = subtotal - discount;
+  const total = totals.subtotalKyat;
   const gate = loaded ? canPurchase(loaded.credit, total) : null;
   const dueDate = loaded ? computeDueDate(new Date(), loaded.shop.creditTermDays) : null;
   const name = loaded?.shop.name ?? shopName ?? '';
@@ -139,19 +155,6 @@ export function CreditCheckout({ totals, note }: { totals: OrderTotals; note?: s
         <>
           <dl className="mt-3 space-y-1.5 text-[0.85rem]">
             <div className="flex justify-between gap-3">
-              <dt className="font-myanmar text-muted-foreground">{t('account.checkout.subtotal')}</dt>
-              <dd className="font-semibold tabular-nums text-foreground">{formatKyat(subtotal)}</dd>
-            </div>
-            {discount > 0 ? (
-              <div className="flex justify-between gap-3 text-primary">
-                <dt className="flex items-center gap-1.5 font-myanmar">
-                  <Gift className="h-3.5 w-3.5" strokeWidth={2.4} aria-hidden="true" />
-                  {t('account.checkout.coupon', { pct: LOYALTY_DISCOUNT_PCT })}
-                </dt>
-                <dd className="font-semibold tabular-nums">−{formatKyat(discount)}</dd>
-              </div>
-            ) : null}
-            <div className="flex justify-between gap-3 border-t border-border pt-1.5">
               <dt className="font-myanmar font-bold text-foreground">{t('account.checkout.total')}</dt>
               <dd className="font-bold tabular-nums text-foreground">{formatKyat(total)}</dd>
             </div>
@@ -166,7 +169,7 @@ export function CreditCheckout({ totals, note }: { totals: OrderTotals; note?: s
             {dueDate ? (
               <div className="flex justify-between gap-3">
                 <dt className="font-myanmar text-muted-foreground">{t('account.checkout.dueBy')}</dt>
-                <dd className="tabular-nums text-foreground">{dueDate.toISOString().slice(0, 10)}</dd>
+                <dd className="tabular-nums text-foreground">{formatDay(dueDate, i18n.language)}</dd>
               </div>
             ) : null}
           </dl>

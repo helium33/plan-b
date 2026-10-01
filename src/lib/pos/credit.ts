@@ -174,11 +174,20 @@ export function evaluateShopCredit(
   };
 }
 
-export type PurchaseDenial = 'MANUAL_HOLD' | 'OVERDUE_LOCK' | 'OVER_LIMIT';
+export type PurchaseDenial = 'MANUAL_HOLD' | 'OVERDUE_LOCK' | 'UNPAID_PREVIOUS' | 'OVER_LIMIT';
 
 export type PurchaseGate =
   | { allowed: true }
-  | { allowed: false; code: PurchaseDenial; projected?: number; limit?: number; days?: number };
+  | {
+      allowed: false;
+      code: PurchaseDenial;
+      projected?: number;
+      limit?: number;
+      days?: number;
+      /** UNPAID_PREVIOUS: the bill to settle first, and what is still owed. */
+      voucherNo?: string;
+      amount?: number;
+    };
 
 /**
  * Whether a credit order of `amount` may go through. Mirrors `canIssueVoucher`
@@ -193,6 +202,19 @@ export function canPurchase(state: ShopCreditState, amount: number): PurchaseGat
     return state.manualHold
       ? { allowed: false, code: 'MANUAL_HOLD' }
       : { allowed: false, code: 'OVERDUE_LOCK', days: state.maxDaysOverdue };
+  }
+
+  // One credit voucher at a time. Each bill is due 14 days after it is issued,
+  // and a new one is opened only once every earlier bill is paid in full —
+  // not merely once it is no longer overdue. Mirrors `UNPAID_PREVIOUS` in the
+  // POS's `canIssueVoucher`.
+  if (state.openCount > 0) {
+    return {
+      allowed: false,
+      code: 'UNPAID_PREVIOUS',
+      voucherNo: state.nextDue?.voucherNo,
+      amount: state.outstanding,
+    };
   }
 
   const projected = state.outstanding + Math.max(0, amount);

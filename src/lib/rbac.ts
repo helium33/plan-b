@@ -30,7 +30,7 @@ export type AppRole = 'admin' | 'sales' | 'shop';
 export type Permission =
   /** Place an order on credit — `handlePurchase`. */
   | 'purchase:credit'
-  /** See a shop's limit, balance and loyalty score. */
+  /** See what a shop owes, by when, and its vouchers. */
   | 'credit:view'
   /** Choose which shop to act for. A shop account is pinned to its own. */
   | 'shops:choose'

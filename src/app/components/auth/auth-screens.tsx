@@ -39,7 +39,7 @@ const GOODBYE_HOLD_MS = 2_800;
 const GOODBYE_FADE_MS = 500;
 
 /**
- * The sign-in screen: the whole screen in the logo's own #577A88, the logo on
+ * The sign-in screen: the whole screen in the logo's own slate teal, the logo on
  * it, the welcome line in white, and the form on a white card beneath — the
  * same colour the goodbye screen fades out on, so arriving and leaving read as
  * one pair.

@@ -22,6 +22,13 @@
  * "dead simple". So a tap adds one, the count sits where the prompt was, and a
  * minus appears only once there is something to subtract. Nothing is on screen
  * until it can do something.
+ *
+ * ── The same quantities, a second way ─────────────────────────────────────
+ * A wholesale line runs to dozens of pieces over several colours, and a count
+ * spread down a list of rows is easy to get wrong. So once anything is chosen,
+ * the foot of the sheet sums it up the other way round: which colours, how
+ * many colours, how many pieces — the selection checkable at a glance before
+ * the buyer goes on to the cart.
  */
 import { useEffect, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -29,6 +36,7 @@ import { ChevronLeft, Minus, ShoppingBag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { FrameImage } from '@/app/components/catalog/frame-image';
+import { ImageZoom, type ZoomSubject } from '@/app/components/catalog/image-zoom';
 import { StockBadge } from '@/app/components/catalog/frame-chrome';
 import { cn } from '@/app/components/ui/utils';
 import { useCartUi } from '@/app/stores/cart-ui-store';
@@ -72,6 +80,7 @@ export function ProductModal({
   const openCart = useCartUi((s) => s.setOpen);
 
   const [shownC, setShownC] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<ZoomSubject | null>(null);
 
   // Reset the shown colour whenever a different model is opened, or the next
   // model inherits the last one's selection and shows the wrong photo first.
@@ -86,6 +95,24 @@ export function ProductModal({
   const name = frameDisplayName(frame);
   const dimensions = formatDimensions(frame.dimensions);
   const totalPieces = Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
+
+  // This model's part of the cart, colour by colour, in catalogue order. A
+  // colour that has since left the catalogue still shows, without a swatch:
+  // its pieces are in the total, so they have to be in the summary too.
+  const known = new Set(frame.variants.map((variant) => variant.cNumber));
+  const chosen = [
+    ...frame.variants
+      .filter((variant) => (quantities[variant.cNumber] ?? 0) > 0)
+      .map((variant) => ({
+        cNumber: variant.cNumber,
+        swatch: variant.swatch as string | null,
+        qty: quantities[variant.cNumber] ?? 0,
+      })),
+    ...Object.entries(quantities)
+      .filter(([cNumber, qty]) => qty > 0 && !known.has(cNumber))
+      .map(([cNumber, qty]) => ({ cNumber, swatch: null as string | null, qty })),
+  ];
+  const photos = active?.images.length ? active.images : hero ? [hero] : [];
 
   return (
     <DialogPrimitive.Root open onOpenChange={(next) => !next && onClose()}>
@@ -119,12 +146,24 @@ export function ProductModal({
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* ── The picture ───────────────────────────────────────────── */}
             <div className="relative border-b border-border bg-white">
-              <FrameImage
-                src={hero}
-                alt={name}
-                eager
-                className="max-h-[42vh] w-full object-contain"
-              />
+              {photos.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoom({
+                      images: photos,
+                      label: name,
+                      caption: active ? `${active.cNumber} · ${active.colorName}` : frame.frameCode,
+                    })
+                  }
+                  aria-label={t('catalog.zoom', { name })}
+                  className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <FrameImage src={hero} alt={name} eager className="h-[40vh] max-h-[26rem] w-full object-contain" />
+                </button>
+              ) : (
+                <FrameImage src={hero} alt={name} eager className="h-[40vh] max-h-[26rem] w-full object-contain" />
+              )}
               <StockBadge status={frame.stockStatus} className="absolute left-3 top-3 shadow-sm" />
             </div>
 
@@ -223,23 +262,53 @@ export function ProductModal({
             </div>
           </div>
 
-          {/* ── Done ─────────────────────────────────────────────────────── */}
+          {/* ── The selection, summed up — then on to the cart ───────────── */}
           {totalPieces > 0 ? (
-            <div className="shrink-0 border-t border-border bg-card p-4">
+            <div className="shrink-0 border-t border-border bg-card px-4 pb-4 pt-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-myanmar text-[0.8rem] font-bold text-foreground">{t('catalog.inCart')}</p>
+                <p className="shrink-0 text-[0.8rem] font-semibold tabular-nums text-muted-foreground">
+                  <span className="font-myanmar">{t('catalog.colorCount', { count: chosen.length })}</span>
+                  {' · '}
+                  <span className="font-myanmar">{t('catalog.pieces', { count: totalPieces })}</span>
+                </p>
+              </div>
+
+              <ul
+                aria-label={t('catalog.inCart')}
+                className="mt-2 flex max-h-[4.75rem] flex-wrap gap-1.5 overflow-y-auto"
+              >
+                {chosen.map((entry) => (
+                  <li
+                    key={entry.cNumber}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 py-1 pl-1 pr-2.5 text-[0.8rem] font-semibold text-foreground"
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={entry.swatch ? { backgroundColor: entry.swatch } : undefined}
+                      className="h-5 w-5 shrink-0 rounded-full border border-black/10 bg-muted dark:border-white/15"
+                    />
+                    <span dir="ltr">{entry.cNumber}</span>
+                    <span className="tabular-nums text-primary">×{entry.qty}</span>
+                  </li>
+                ))}
+              </ul>
+
               <button
                 type="button"
                 onClick={() => {
                   onClose();
                   openCart(true);
                 }}
-                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
                 <ShoppingBag className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
                 <span className="font-myanmar">{t('catalog.doneAdding')}</span>
-                <span className="tabular-nums">({totalPieces})</span>
               </button>
             </div>
           ) : null}
+
+          <ImageZoom subject={zoom} onClose={() => setZoom(null)} />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
